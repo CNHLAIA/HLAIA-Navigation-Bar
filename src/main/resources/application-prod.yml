@@ -1,0 +1,45 @@
+# 部署到飞牛 NAS 时的生产环境配置
+# 通过 SPRING_PROFILES_ACTIVE=prod 激活
+
+spring:
+  datasource:
+    url: jdbc:mysql://mysql:3306/hlaia_nav?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    username: hlaia
+    password: hlaia123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+
+  kafka:
+    bootstrap-servers: kafka:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: hlaia-nav
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+jwt:
+  secret: ${JWT_SECRET:hlaia-navigation-bar-secret-key-must-be-at-least-256-bits-long-for-hs256-algorithm}
+  access-token-expiration: ${JWT_ACCESS_EXPIRATION:86400000}
+  refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+logging:
+  level:
+    com.hlaia: info

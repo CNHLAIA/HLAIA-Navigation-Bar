@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  # 后端 Spring Boot 服务
+  # 不对外暴露端口，仅通过 app-network 内部网络与前端通信
+  hlaia-nav:
+    build: .
+    image: hlaia-navigation-bar:latest
+    container_name: hlaia-nav
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TZ: Asia/Shanghai
+    networks:
+      - app-network
+
+  # 前端 Nginx 服务
+  # 对外暴露 13566 端口，同时提供静态文件和 API 反向代理
+  hlaia-nav-frontend:
+    build: ./frontend
+    container_name: hlaia-nav-frontend
+    restart: unless-stopped
+    ports:
+      - "13566:80"
+    environment:
+      TZ: Asia/Shanghai
+    depends_on:
+      - hlaia-nav
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true

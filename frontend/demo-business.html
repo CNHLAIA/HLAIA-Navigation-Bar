@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HLAIA 导航栏 - 书签管理</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/element-plus@2.9.1/dist/index.css" />
+  <style>
+    /* ========================================
+       CSS Reset & Variables
+       ======================================== */
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #F5F6FA;
+      --surface: #FFFFFF;
+      --primary: #1B2A4A;
+      --primary-light: #2C3E6B;
+      --primary-lighter: #3D5290;
+      --text: #333333;
+      --text-secondary: #6B7280;
+      --text-muted: #9CA3AF;
+      --border: #DDE1E6;
+      --accent: #FF6B35;
+      --accent-hover: #E85D2C;
+      --accent-light: rgba(255, 107, 53, 0.1);
+      --shadow-sm: 0 1px 3px rgba(27, 42, 74, 0.06);
+      --shadow-md: 0 4px 12px rgba(27, 42, 74, 0.08);
+      --shadow-lg: 0 8px 24px rgba(27, 42, 74, 0.12);
+      --shadow-hover: 0 12px 32px rgba(27, 42, 74, 0.16);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --sidebar-width: 260px;
+      --navbar-height: 60px;
+      --font: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    #app {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ========================================
+       Top Navbar
+       ======================================== */
+    .top-navbar {
+      height: var(--navbar-height);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 24px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .navbar-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 220px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--primary);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .brand-text {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.3px;
+    }
+
+    .navbar-nav {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      justify-content: center;
+    }
+
+    .nav-link {
+      padding: 8px 20px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-decoration: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      user-select: none;
+    }
+
+    .nav-link:hover {
+      color: var(--primary);
+      background: rgba(27, 42, 74, 0.04);
+    }
+
+    .nav-link.active {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .nav-link.active::after {
+      content: '';
+      position: absolute;
+      bottom: -16px;
+      left: 20px;
+      right: 20px;
+      height: 2.5px;
+      background: var(--accent);
+      border-radius: 2px 2px 0 0;
+    }
+
+    .navbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 220px;
+      justify-content: flex-end;
+    }
+
+    /* Language Toggle */
+    .lang-toggle {
+      display: flex;
+      align-items: center;
+      background: var(--bg);
+      border-radius: 20px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .lang-btn {
+      padding: 4px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      border-radius: 16px;
+      transition: var(--transition);
+      font-family: var(--font);
+    }
+
+    .lang-btn.active {
+      background: var(--surface);
+      color: var(--primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .lang-btn:hover:not(.active) {
+      color: var(--primary);
+    }
+
+    /* User Avatar */
+    .user-avatar-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: var(--radius-md);
+      transition: var(--transition);
+    }
+
+    .user-avatar-wrapper:hover {
+      background: rgba(27, 42, 74, 0.04);
+    }
+
+    .user-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-lighter) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .user-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .user-chevron {
+      color: var(--text-muted);
+      font-size: 10px;
+    }
+
+    /* ========================================
+       Layout Body
+       ======================================== */
+    .app-body {
+      display: flex;
+      margin-top: var(--navbar-height);
+      height: calc(100% - var(--navbar-height));
+    }
+
+    /* ========================================
+       Left Sidebar
+       ======================================== */
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: var(--sidebar-width);
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      position: fixed;
+      top: var(--navbar-height);
+      left: 0;
+      bottom: 0;
+      z-index: 50;
+    }
+
+    .sidebar-header {
+      padding: 20px 16px 12px;
+    }
+
+    .new-folder-btn {
+      width: 100%;
+      padding: 10px 16px;
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: var(--transition);
+    }
+
+    .new-folder-btn:hover {
+      background: var(--primary-light);
+      box-shadow: var(--shadow-md);
+    }
+
+    .new-folder-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .sidebar-search {
+      padding: 0 16px 12px;
+    }
+
+    .sidebar-search input {
+      width: 100%;
+      padding: 8px 12px 8px 34px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: var(--transition);
+    }
+
+    .sidebar-search input:focus {
+      border-color: var(--primary-lighter);
+      box-shadow: 0 0 0 3px rgba(27, 42, 74, 0.08);
+    }
+
+    .sidebar-search-wrapper {
+      position: relative;
+    }
+
+    .sidebar-search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    /* Folder Tree */
+    .folder-tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 8px;
+    }
+
+    .folder-tree::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    .folder-tree::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 4px;
+    }
+
+    .folder-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: var(--transition);
+      user-select: none;
+      font-size: 13.5px;
+      color: var(--text);
+    }
+
+    .folder-item:hover {
+      background: rgba(27, 42, 74, 0.04);
+    }
+
+    .folder-item.active {
+      background: var(--accent-light);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .folder-toggle {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--text-muted);
+      transition: transform 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .folder-toggle.expanded {
+      transform: rotate(90deg);
+    }
+
+    .folder-toggle.empty {
+      visibility: hidden;
+    }
+
+    .folder-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .folder-name {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .folder-count {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg);
+      padding: 1px 7px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+
+    .folder-children {
+      padding-left: 20px;
+      overflow: hidden;
+      transition: max-height 0.25s ease;
+    }
+
+    .folder-children.collapsed {
+      max-height: 0 !important;
+    }
+
+    /* Sidebar Footer */
+    .sidebar-footer {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .user-info-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--bg);
+      border-radius: var(--radius-md);
+    }
+
+    .user-info-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1B2A4A 0%, #3D5290 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .user-info-detail {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .user-info-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .user-info-role {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    /* ========================================
+       Main Content
+       ======================================== */
+    .main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      padding: 24px 32px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    /* Breadcrumb */
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    .breadcrumb-item {
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .breadcrumb-item:hover {
+      color: var(--primary);
+    }
+
+    .breadcrumb-sep {
+      color: var(--border);
+      font-size: 11px;
+    }
+
+    .breadcrumb-current {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Content Header */
+    .content-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .content-title {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: -0.3px;
+    }
+
+    .content-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .btn-add-bookmark {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 13.5px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: var(--transition);
+      box-shadow: 0 2px 8px rgba(255, 107, 53, 0.25);
+    }
+
+    .btn-add-bookmark:hover {
+      background: var(--accent-hover);
+      box-shadow: 0 4px 14px rgba(255, 107, 53, 0.35);
+      transform: translateY(-1px);
+    }
+
+    .btn-add-bookmark svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .btn-secondary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 16px;
+      background: var(--surface);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--primary-lighter);
+      color: var(--primary);
+      background: rgba(27, 42, 74, 0.02);
+    }
+
+    /* Bookmark Grid */
+    .bookmark-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .bookmark-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      cursor: pointer;
+      transition: var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bookmark-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: transparent;
+      transition: var(--transition);
+    }
+
+    .bookmark-card:hover {
+      box-shadow: var(--shadow-hover);
+      border-color: transparent;
+      transform: translateY(-2px);
+    }
+
+    .bookmark-card:hover::before {
+      background: var(--accent);
+    }
+
+    .bookmark-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .bookmark-favicon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .bookmark-favicon.blue { background: #EBF0FF; color: #1B2A4A; }
+    .bookmark-favicon.orange { background: #FFF3EB; color: #FF6B35; }
+    .bookmark-favicon.green { background: #EBFAF0; color: #059669; }
+    .bookmark-favicon.purple { background: #F3EBFF; color: #7C3AED; }
+    .bookmark-favicon.teal { background: #EBF8FA; color: #0891B2; }
+    .bookmark-favicon.red { background: #FFF0EB; color: #DC2626; }
+
+    .bookmark-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bookmark-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bookmark-url {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .bookmark-desc {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 14px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .bookmark-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .bookmark-tags {
+      display: flex;
+      gap: 6px;
+    }
+
+    .bookmark-tag {
+      padding: 2px 8px;
+      background: var(--bg);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .bookmark-actions-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: var(--transition);
+      opacity: 0;
+    }
+
+    .bookmark-card:hover .bookmark-actions-btn {
+      opacity: 1;
+    }
+
+    .bookmark-actions-btn:hover {
+      background: var(--bg);
+      color: var(--primary);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-text {
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    /* ========================================
+       Floating Language Switcher
+       ======================================== */
+    .floating-lang {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      box-shadow: var(--shadow-md);
+      cursor: pointer;
+      transition: var(--transition);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      font-family: var(--font);
+    }
+
+    .floating-lang:hover {
+      box-shadow: var(--shadow-lg);
+      border-color: var(--primary-lighter);
+      color: var(--primary);
+    }
+
+    .floating-lang svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    /* ========================================
+       Dialog / Modal Overlay
+       ======================================== */
+    .el-dialog {
+      border-radius: var(--radius-lg) !important;
+    }
+
+    .el-dialog__header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px !important;
+    }
+
+    .el-dialog__title {
+      font-weight: 700 !important;
+      color: var(--primary) !important;
+      font-family: var(--font) !important;
+    }
+
+    /* ========================================
+       Scrollbar
+       ======================================== */
+    .main-content::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .main-content::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 6px;
+    }
+
+    .main-content::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* ========================================
+       Dropdown Menu Override
+       ======================================== */
+    .user-dropdown-menu {
+      padding: 6px !important;
+      min-width: 160px;
+      border-radius: var(--radius-md) !important;
+      box-shadow: var(--shadow-lg) !important;
+    }
+
+    .user-dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px !important;
+      border-radius: var(--radius-sm) !important;
+      font-size: 13px !important;
+      font-family: var(--font) !important;
+    }
+
+    .user-dropdown-item.danger {
+      color: #DC2626 !important;
+    }
+
+    /* ========================================
+       Context Menu Override
+       ======================================== */
+    .context-menu {
+      padding: 6px !important;
+      border-radius: var(--radius-md) !important;
+      box-shadow: var(--shadow-lg) !important;
+    }
+
+    /* ========================================
+       Animations
+       ======================================== */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .bookmark-card {
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    .bookmark-card:nth-child(2) { animation-delay: 0.05s; }
+    .bookmark-card:nth-child(3) { animation-delay: 0.1s; }
+    .bookmark-card:nth-child(4) { animation-delay: 0.15s; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- ============ Top Navbar ============ -->
+    <header class="top-navbar">
+      <div class="navbar-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+            <path d="M2 17l10 5 10-5"/>
+            <path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <span class="brand-text">HLAIA {{ t('navBar') }}</span>
+      </div>
+
+      <nav class="navbar-nav">
+        <a class="nav-link" :class="{ active: activeTab === 'bookmarks' }" @click="activeTab = 'bookmarks'">
+          {{ t('bookmarks') }}
+        </a>
+        <a class="nav-link" :class="{ active: activeTab === 'staging' }" @click="activeTab = 'staging'">
+          {{ t('staging') }}
+        </a>
+        <a class="nav-link" :class="{ active: activeTab === 'admin' }" @click="activeTab = 'admin'">
+          {{ t('admin') }}
+        </a>
+      </nav>
+
+      <div class="navbar-actions">
+        <div class="lang-toggle">
+          <button class="lang-btn" :class="{ active: lang === 'zh' }" @click="lang = 'zh'">中</button>
+          <button class="lang-btn" :class="{ active: lang === 'en' }" @click="lang = 'en'">EN</button>
+        </div>
+
+        <el-dropdown trigger="click" @command="handleUserCommand">
+          <div class="user-avatar-wrapper">
+            <div class="user-avatar">{{ t('userInitial') }}</div>
+            <span class="user-name">{{ t('userName') }}</span>
+            <span class="user-chevron">&#9662;</span>
+          </div>
+          <template #dropdown>
+            <el-dropdown-menu class="user-dropdown-menu">
+              <el-dropdown-item class="user-dropdown-item" command="profile">
+                {{ t('myProfile') }}
+              </el-dropdown-item>
+              <el-dropdown-item class="user-dropdown-item" command="settings">
+                {{ t('settings') }}
+              </el-dropdown-item>
+              <el-dropdown-item class="user-dropdown-item danger" command="logout" divided>
+                {{ t('logout') }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+    </header>
+
+    <!-- ============ Body ============ -->
+    <div class="app-body">
+      <!-- ============ Left Sidebar ============ -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <button class="new-folder-btn" @click="showNewFolderDialog = true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            {{ t('newFolder') }}
+          </button>
+        </div>
+
+        <div class="sidebar-search">
+          <div class="sidebar-search-wrapper">
+            <span class="sidebar-search-icon">&#128269;</span>
+            <input type="text" :placeholder="t('searchFolders')" v-model="folderSearch" />
+          </div>
+        </div>
+
+        <div class="folder-tree">
+          <template v-for="folder in filteredFolders" :key="folder.id">
+            <div class="folder-item"
+                 :class="{ active: selectedFolderId === folder.id }"
+                 @click="selectFolder(folder)">
+              <span class="folder-toggle"
+                    :class="{ expanded: expandedFolders[folder.id], empty: !folder.children || folder.children.length === 0 }"
+                    @click.stop="toggleFolder(folder.id)">
+                &#9654;
+              </span>
+              <span class="folder-icon">{{ folder.icon }}</span>
+              <span class="folder-name">{{ t(folder.nameKey) }}</span>
+              <span class="folder-count" v-if="folder.count">{{ folder.count }}</span>
+            </div>
+            <div class="folder-children" :class="{ collapsed: !expandedFolders[folder.id] }"
+                 :style="{ maxHeight: expandedFolders[folder.id] ? '500px' : '0' }"
+                 v-if="folder.children && folder.children.length > 0">
+              <div class="folder-item"
+                   v-for="child in folder.children"
+                   :key="child.id"
+                   :class="{ active: selectedFolderId === child.id }"
+                   @click="selectFolder(child)">
+                <span class="folder-toggle empty">&#9654;</span>
+                <span class="folder-icon">{{ child.icon }}</span>
+                <span class="folder-name">{{ t(child.nameKey) }}</span>
+                <span class="folder-count" v-if="child.count">{{ child.count }}</span>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="user-info-card">
+            <div class="user-info-avatar">{{ t('userInitial') }}</div>
+            <div class="user-info-detail">
+              <div class="user-info-name">{{ t('userName') }}</div>
+              <div class="user-info-role">{{ t('userRole') }}</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ============ Main Content ============ -->
+      <main class="main-content">
+        <!-- Breadcrumb -->
+        <div class="breadcrumb">
+          <span class="breadcrumb-item" @click="selectedFolderId = null">{{ t('bookmarks') }}</span>
+          <template v-for="(crumb, idx) in breadcrumbs" :key="idx">
+            <span class="breadcrumb-sep">&#8250;</span>
+            <span :class="idx === breadcrumbs.length - 1 ? 'breadcrumb-current' : 'breadcrumb-item'"
+                  @click="crumb.id && (selectedFolderId = crumb.id)">
+              {{ t(crumb.nameKey) }}
+            </span>
+          </template>
+        </div>
+
+        <!-- Content Header -->
+        <div class="content-header">
+          <h1 class="content-title">{{ currentFolderTitle }}</h1>
+          <div class="content-actions">
+            <button class="btn-secondary" @click="showSortDialog = true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h12M3 18h6"/></svg>
+              {{ t('sort') }}
+            </button>
+            <button class="btn-add-bookmark" @click="showAddBookmarkDialog = true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              {{ t('addBookmark') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Bookmark Grid -->
+        <div class="bookmark-grid" v-if="filteredBookmarks.length > 0">
+          <div class="bookmark-card" v-for="bookmark in filteredBookmarks" :key="bookmark.id">
+            <div class="bookmark-card-header">
+              <div class="bookmark-favicon" :class="bookmark.colorClass">
+                {{ bookmark.emoji }}
+              </div>
+              <div class="bookmark-info">
+                <div class="bookmark-title">{{ bookmark.title }}</div>
+                <div class="bookmark-url">{{ bookmark.url }}</div>
+              </div>
+              <el-dropdown trigger="click">
+                <button class="bookmark-actions-btn" @click.stop>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                </button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item>{{ t('edit') }}</el-dropdown-item>
+                    <el-dropdown-item>{{ t('move') }}</el-dropdown-item>
+                    <el-dropdown-item divided>{{ t('copyUrl') }}</el-dropdown-item>
+                    <el-dropdown-item class="danger">{{ t('delete') }}</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+            <div class="bookmark-desc">{{ bookmark.description }}</div>
+            <div class="bookmark-footer">
+              <div class="bookmark-tags">
+                <span class="bookmark-tag" v-for="tag in bookmark.tags" :key="tag">{{ tag }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty-state" v-else>
+          <div class="empty-state-icon">&#128218;</div>
+          <div class="empty-state-text">{{ t('noBookmarks') }}</div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ============ Floating Language Switcher ============ -->
+    <div class="floating-lang" @click="toggleLang">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="2" y1="12" x2="22" y2="12"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+      </svg>
+      <span>{{ lang === 'zh' ? '中文' : 'English' }}</span>
+      <span style="font-size:10px;">&#9662;</span>
+    </div>
+
+    <!-- ============ New Folder Dialog ============ -->
+    <el-dialog v-model="showNewFolderDialog" :title="t('newFolder')" width="420px" destroy-on-close>
+      <el-form label-position="top">
+        <el-form-item :label="t('folderName')">
+          <el-input :placeholder="t('folderNamePlaceholder')" v-model="newFolderName" />
+        </el-form-item>
+        <el-form-item :label="t('parentFolder')">
+          <el-select v-model="newFolderParent" :placeholder="t('selectParent')" style="width: 100%;">
+            <el-option :label="t('rootFolder')" :value="null" />
+            <el-option v-for="f in allFoldersFlat" :key="f.id" :label="t(f.nameKey)" :value="f.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showNewFolderDialog = false">{{ t('cancel') }}</el-button>
+        <el-button type="primary" @click="showNewFolderDialog = false" style="background: var(--primary); border-color: var(--primary);">
+          {{ t('create') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ============ Add Bookmark Dialog ============ -->
+    <el-dialog v-model="showAddBookmarkDialog" :title="t('addBookmark')" width="480px" destroy-on-close>
+      <el-form label-position="top">
+        <el-form-item :label="t('bookmarkTitle')">
+          <el-input :placeholder="t('bookmarkTitlePlaceholder')" v-model="newBookmarkTitle" />
+        </el-form-item>
+        <el-form-item label="URL">
+          <el-input placeholder="https://" v-model="newBookmarkUrl" />
+        </el-form-item>
+        <el-form-item :label="t('description')">
+          <el-input type="textarea" :rows="3" :placeholder="t('descPlaceholder')" v-model="newBookmarkDesc" />
+        </el-form-item>
+        <el-form-item :label="t('targetFolder')">
+          <el-select v-model="newBookmarkFolder" :placeholder="t('selectFolder')" style="width: 100%;">
+            <el-option v-for="f in allFoldersFlat" :key="f.id" :label="t(f.nameKey)" :value="f.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAddBookmarkDialog = false">{{ t('cancel') }}</el-button>
+        <el-button type="primary" @click="showAddBookmarkDialog = false" style="background: var(--accent); border-color: var(--accent);">
+          {{ t('add') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- ============ Sort Dialog ============ -->
+    <el-dialog v-model="showSortDialog" :title="t('sort')" width="360px" destroy-on-close>
+      <el-radio-group v-model="sortBy" style="display: flex; flex-direction: column; gap: 12px;">
+        <el-radio value="name">{{ t('sortName') }}</el-radio>
+        <el-radio value="date">{{ t('sortDate') }}</el-radio>
+        <el-radio value="url">{{ t('sortUrl') }}</el-radio>
+      </el-radio-group>
+      <template #footer>
+        <el-button @click="showSortDialog = false">{{ t('cancel') }}</el-button>
+        <el-button type="primary" @click="showSortDialog = false" style="background: var(--primary); border-color: var(--primary);">
+          {{ t('apply') }}
+        </el-button>
+      </template>
+    </el-dialog>
+  </div>
+
+  <!-- ============ Scripts ============ -->
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/element-plus@2.9.1/dist/index.full.min.js"></script>
+  <script>
+    const { createApp, ref, reactive, computed } = Vue;
+
+    const app = createApp({
+      setup() {
+        // ========== i18n ==========
+        const lang = ref('zh');
+
+        const messages = {
+          zh: {
+            navBar: '导航栏',
+            bookmarks: '书签',
+            staging: '暂存区',
+            admin: '管理',
+            newFolder: '新建文件夹',
+            searchFolders: '搜索文件夹...',
+            addBookmark: '添加书签',
+            sort: '排序',
+            edit: '编辑',
+            move: '移动到...',
+            copyUrl: '复制链接',
+            delete: '删除',
+            noBookmarks: '当前文件夹暂无书签',
+            folderName: '文件夹名称',
+            folderNamePlaceholder: '请输入文件夹名称',
+            parentFolder: '所属文件夹',
+            selectParent: '选择所属文件夹',
+            rootFolder: '根目录',
+            cancel: '取消',
+            create: '创建',
+            bookmarkTitle: '书签标题',
+            bookmarkTitlePlaceholder: '请输入书签标题',
+            description: '描述',
+            descPlaceholder: '请输入书签描述（可选）',
+            targetFolder: '目标文件夹',
+            selectFolder: '选择目标文件夹',
+            add: '添加',
+            apply: '应用',
+            sortName: '按名称排序',
+            sortDate: '按创建时间排序',
+            sortUrl: '按 URL 排序',
+            myProfile: '个人中心',
+            settings: '系统设置',
+            logout: '退出登录',
+            userName: '张三',
+            userInitial: '张',
+            userRole: '管理员',
+            // folder names
+            devTools: '开发工具',
+            ide: 'IDE',
+            onlineEditor: '在线编辑器',
+            learnResources: '学习资源',
+            commonSites: '常用网站',
+            // folder group labels
+            allBookmarks: '所有书签',
+          },
+          en: {
+            navBar: 'NavBar',
+            bookmarks: 'Bookmarks',
+            staging: 'Staging',
+            admin: 'Admin',
+            newFolder: 'New Folder',
+            searchFolders: 'Search folders...',
+            addBookmark: 'Add Bookmark',
+            sort: 'Sort',
+            edit: 'Edit',
+            move: 'Move to...',
+            copyUrl: 'Copy URL',
+            delete: 'Delete',
+            noBookmarks: 'No bookmarks in this folder',
+            folderName: 'Folder Name',
+            folderNamePlaceholder: 'Enter folder name',
+            parentFolder: 'Parent Folder',
+            selectParent: 'Select parent folder',
+            rootFolder: 'Root',
+            cancel: 'Cancel',
+            create: 'Create',
+            bookmarkTitle: 'Bookmark Title',
+            bookmarkTitlePlaceholder: 'Enter bookmark title',
+            description: 'Description',
+            descPlaceholder: 'Enter description (optional)',
+            targetFolder: 'Target Folder',
+            selectFolder: 'Select target folder',
+            add: 'Add',
+            apply: 'Apply',
+            sortName: 'Sort by Name',
+            sortDate: 'Sort by Date Created',
+            sortUrl: 'Sort by URL',
+            myProfile: 'My Profile',
+            settings: 'Settings',
+            logout: 'Sign Out',
+            userName: 'Zhang San',
+            userInitial: 'Z',
+            userRole: 'Administrator',
+            // folder names
+            devTools: 'Dev Tools',
+            ide: 'IDE',
+            onlineEditor: 'Online Editors',
+            learnResources: 'Learning',
+            commonSites: 'Favorites',
+            // folder group labels
+            allBookmarks: 'All Bookmarks',
+          }
+        };
+
+        const t = (key) => messages[lang.value][key] || key;
+
+        const toggleLang = () => {
+          lang.value = lang.value === 'zh' ? 'en' : 'zh';
+        };
+
+        // ========== State ==========
+        const activeTab = ref('bookmarks');
+        const folderSearch = ref('');
+        const showNewFolderDialog = ref(false);
+        const showAddBookmarkDialog = ref(false);
+        const showSortDialog = ref(false);
+        const newFolderName = ref('');
+        const newFolderParent = ref(null);
+        const newBookmarkTitle = ref('');
+        const newBookmarkUrl = ref('');
+        const newBookmarkDesc = ref('');
+        const newBookmarkFolder = ref(null);
+        const sortBy = ref('name');
+        const selectedFolderId = ref('ide');
+
+        const expandedFolders = reactive({
+          'dev-tools': true,
+          'learn-resources': false,
+          'common-sites': false,
+        });
+
+        // ========== Folder Data ==========
+        const folders = [
+          {
+            id: 'dev-tools',
+            nameKey: 'devTools',
+            icon: '\uD83D\uDCC1',
+            count: 8,
+            children: [
+              { id: 'ide', nameKey: 'ide', icon: '\uD83D\uDCBB', count: 4 },
+              { id: 'online-editor', nameKey: 'onlineEditor', icon: '\u270F\uFE0F', count: 3 },
+            ]
+          },
+          {
+            id: 'learn-resources',
+            nameKey: 'learnResources',
+            icon: '\uD83D\uDCDA',
+            count: 12,
+            children: []
+          },
+          {
+            id: 'common-sites',
+            nameKey: 'commonSites',
+            icon: '\u2B50',
+            count: 6,
+            children: []
+          },
+        ];
+
+        const allFoldersFlat = computed(() => {
+          const result = [];
+          folders.forEach(f => {
+            result.push(f);
+            if (f.children) f.children.forEach(c => result.push(c));
+          });
+          return result;
+        });
+
+        const filteredFolders = computed(() => {
+          if (!folderSearch.value) return folders;
+          const search = folderSearch.value.toLowerCase();
+          return folders.filter(f => {
+            const nameMatch = t(f.nameKey).toLowerCase().includes(search);
+            const childMatch = f.children && f.children.some(c => t(c.nameKey).toLowerCase().includes(search));
+            return nameMatch || childMatch;
+          });
+        });
+
+        // ========== Bookmark Data ==========
+        const bookmarks = [
+          {
+            id: 1,
+            folderId: 'ide',
+            title: 'Visual Studio Code',
+            url: 'https://code.visualstudio.com/',
+            description: 'Microsoft 开发的免费、开源代码编辑器，支持丰富的扩展生态。',
+            emoji: '\uD83D\uDCBB',
+            colorClass: 'blue',
+            tags: ['IDE', 'Editor'],
+          },
+          {
+            id: 2,
+            folderId: 'ide',
+            title: 'IntelliJ IDEA',
+            url: 'https://www.jetbrains.com/idea/',
+            description: 'JetBrains 出品的 Java 集成开发环境，智能代码补全和重构。',
+            emoji: '\uD83C\uDFAD',
+            colorClass: 'orange',
+            tags: ['Java', 'IDE'],
+          },
+          {
+            id: 3,
+            folderId: 'ide',
+            title: 'WebStorm',
+            url: 'https://www.jetbrains.com/webstorm/',
+            description: 'JetBrains 出品的前端开发 IDE，专为 JavaScript 和 TypeScript 设计。',
+            emoji: '\u26A1',
+            colorClass: 'purple',
+            tags: ['Frontend', 'JS'],
+          },
+          {
+            id: 4,
+            folderId: 'ide',
+            title: 'GitHub Codespaces',
+            url: 'https://github.com/features/codespaces',
+            description: '基于云的开发环境，可在浏览器中直接编辑和运行代码。',
+            emoji: '\uD83C\uDF10',
+            colorClass: 'teal',
+            tags: ['Cloud', 'Dev'],
+          },
+        ];
+
+        const filteredBookmarks = computed(() => {
+          if (!selectedFolderId.value) return bookmarks;
+          return bookmarks.filter(b => b.folderId === selectedFolderId.value);
+        });
+
+        // ========== Breadcrumbs ==========
+        const breadcrumbs = computed(() => {
+          const crumbs = [];
+          for (const folder of folders) {
+            if (folder.id === selectedFolderId.value) {
+              crumbs.push({ nameKey: folder.nameKey, id: folder.id });
+              return crumbs;
+            }
+            if (folder.children) {
+              for (const child of folder.children) {
+                if (child.id === selectedFolderId.value) {
+                  crumbs.push({ nameKey: folder.nameKey, id: folder.id });
+                  crumbs.push({ nameKey: child.nameKey, id: child.id });
+                  return crumbs;
+                }
+              }
+            }
+          }
+          return crumbs;
+        });
+
+        const currentFolderTitle = computed(() => {
+          if (breadcrumbs.value.length === 0) return t('allBookmarks');
+          const last = breadcrumbs.value[breadcrumbs.value.length - 1];
+          return t(last.nameKey);
+        });
+
+        // ========== Methods ==========
+        const toggleFolder = (id) => {
+          expandedFolders[id] = !expandedFolders[id];
+        };
+
+        const selectFolder = (folder) => {
+          selectedFolderId.value = folder.id;
+        };
+
+        const handleUserCommand = (command) => {
+          if (command === 'logout') {
+            ElementPlus.ElMessageBox.confirm(
+              lang.value === 'zh' ? '确定要退出登录吗？' : 'Are you sure you want to sign out?',
+              lang.value === 'zh' ? '提示' : 'Confirm',
+              {
+                confirmButtonText: lang.value === 'zh' ? '确定' : 'OK',
+                cancelButtonText: lang.value === 'zh' ? '取消' : 'Cancel',
+                type: 'warning',
+              }
+            ).catch(() => {});
+          }
+        };
+
+        return {
+          lang,
+          t,
+          toggleLang,
+          activeTab,
+          folderSearch,
+          showNewFolderDialog,
+          showAddBookmarkDialog,
+          showSortDialog,
+          newFolderName,
+          newFolderParent,
+          newBookmarkTitle,
+          newBookmarkUrl,
+          newBookmarkDesc,
+          newBookmarkFolder,
+          sortBy,
+          selectedFolderId,
+          expandedFolders,
+          folders,
+          allFoldersFlat,
+          filteredFolders,
+          bookmarks,
+          filteredBookmarks,
+          breadcrumbs,
+          currentFolderTitle,
+          toggleFolder,
+          selectFolder,
+          handleUserCommand,
+        };
+      }
+    });
+
+    app.use(ElementPlus);
+    app.mount('#app');
+  </script>
+</body>
+</html>

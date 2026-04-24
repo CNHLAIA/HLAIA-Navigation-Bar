@@ -1,0 +1,1 @@
+ALTER TABLE `user` ADD COLUMN `nickname` VARCHAR(15) DEFAULT NULL AFTER `email`;

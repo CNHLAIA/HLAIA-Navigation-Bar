@@ -1,0 +1,2 @@
+-- Admin user will be created programmatically via AdminInitializer CommandLineRunner
+-- to ensure BCrypt password hash is generated correctly by the application.

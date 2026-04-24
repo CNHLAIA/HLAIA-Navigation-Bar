@@ -1,0 +1,32 @@
+# 版本控制
+.git
+.gitignore
+
+# IDE 配置
+.idea
+*.iml
+.vscode
+
+# 前端依赖和构建产物（前端在 Docker 中独立构建）
+frontend/node_modules
+frontend/dist
+
+# 后端构建产物
+target
+
+# 环境变量文件（包含敏感信息，不应进入镜像）
+.env
+.env.example
+
+# 文档和设计文件
+docs
+
+# 浏览器扩展插件（独立打包，不进入后端镜像）
+extension
+
+# Docker 相关文件（避免递归）
+docker-compose.yml
+
+# 项目说明文件
+CLAUDE.md
+*.md
