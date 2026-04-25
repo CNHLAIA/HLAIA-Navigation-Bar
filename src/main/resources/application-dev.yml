@@ -9,7 +9,10 @@ spring:
     redis:
       host: 192.168.8.6
       port: 6379
-      key-prefix: "dev:"
+
+    elasticsearch:
+      repositories:
+        enabled: true
 
   kafka:
     bootstrap-servers: 192.168.8.6:9092
@@ -25,6 +28,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+app:
+  redis:
+    key-prefix: "hlaia_nav_dev:"
 
 mybatis-plus:
   configuration:

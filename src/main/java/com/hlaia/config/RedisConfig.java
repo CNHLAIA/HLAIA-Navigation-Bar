@@ -1,9 +1,11 @@
 package com.hlaia.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
@@ -62,6 +64,12 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @Configuration
 public class RedisConfig {
 
+    // @Value 从 yml 配置文件读取值，注入到这个变量
+    // ${app.redis.key-prefix} 对应 yml 里的 app.redis.key-prefix
+    // 如果 yml 里没配，默认值是空字符串（冒号后面那部分）
+    @Value("${app.redis.key-prefix}")
+    private String keyPrefix;
+
     /**
      * 创建 StringRedisTemplate Bean
      *
@@ -85,10 +93,10 @@ public class RedisConfig {
         // 设置连接工厂（必须设置，否则模板无法连接 Redis）
         template.setConnectionFactory(connectionFactory);
 
-        // 设置 Key（键）的序列化器为 StringRedisSerializer
+        // 设置 Key（键）的序列化器为 StringRedisSerializer，这里用自定义的
         // 这样 Redis 中存储的键就是普通字符串，例如 "jwt:blacklist:eyJhbG..."
         // 如果不设置，默认使用 JDK 序列化，存储的是乱码
-        template.setKeySerializer(new StringRedisSerializer());
+        template.setKeySerializer(keyStringRedisSerializer());
 
         // 设置 Value（值）的序列化器为 StringRedisSerializer
         // 这样 Redis 中存储的值也是普通字符串，例如 "1"、"admin" 等
@@ -97,7 +105,7 @@ public class RedisConfig {
         // 设置 Hash Key 的序列化器
         // Hash 是 Redis 的一种数据结构（类似 Java 的 HashMap）
         // 例如：HSET user:1 name "admin"  → "name" 就是 Hash Key
-        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashKeySerializer(keyStringRedisSerializer());
 
         // 设置 Hash Value 的序列化器
         // 例如：HSET user:1 name "admin"  → "admin" 就是 Hash Value
@@ -109,5 +117,25 @@ public class RedisConfig {
         template.afterPropertiesSet();
 
         return template;
+    }
+
+    /**
+     * 自定义 key 序列化器
+     */
+    @Bean
+    public RedisSerializer<String> keyStringRedisSerializer() {
+        StringRedisSerializer base = new StringRedisSerializer();
+        return new RedisSerializer<String>() {
+            @Override
+            public byte[] serialize(String key) {
+                return base.serialize(keyPrefix + key);
+            }
+
+            @Override
+            public String deserialize(byte[] bytes) {
+                // 反序列化不用改
+                return base.deserialize(bytes);
+            }
+        };
     }
 }
