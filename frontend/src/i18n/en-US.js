@@ -68,6 +68,14 @@ export default {
     settings: 'Settings',
     signOut: 'Sign Out'
   },
+  search: {
+    placeholder: 'Search bookmarks or folders...',
+    noResults: 'No results found',
+    resultsTitle: 'Search results: {keyword}',
+    bookmark: 'Bookmark',
+    folder: 'Folder',
+    totalResults: '{total} result(s) found'
+  },
   bookmarks: {
     loading: 'Loading bookmarks...',
     addBookmark: 'Add Bookmark',

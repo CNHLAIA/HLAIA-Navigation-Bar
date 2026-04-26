@@ -9,7 +9,6 @@ spring:
     redis:
       host: 192.168.8.6
       port: 6379
-
     elasticsearch:
       repositories:
         enabled: true
@@ -28,6 +27,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+
+  elasticsearch:
+    uris: http://192.168.8.6:9200
 
 app:
   redis:

@@ -55,6 +55,8 @@ public class FolderService {
     // final 表示这些字段必须在构造方法中赋值，赋值后不可修改
     private final FolderMapper folderMapper;
     private final BookmarkMapper bookmarkMapper;
+    // Elasticsearch 数据同步：文件夹增删改后需要同步到 ES
+    private final com.hlaia.kafka.KafkaProducer kafkaProducer;
 
     /**
      * 获取用户的文件夹树 —— 本项目最核心的方法之一
@@ -208,6 +210,8 @@ public class FolderService {
         folder.setSortOrder(count.intValue());
 
         folderMapper.insert(folder);
+        // 创建文件夹后同步到 ES
+        kafkaProducer.sendSearchSync("CREATE", "folder", folder.getId());
         return toTreeResponse(folder);
     }
 
@@ -234,6 +238,8 @@ public class FolderService {
         if (request.getName() != null) folder.setName(request.getName());
         if (request.getIcon() != null) folder.setIcon(request.getIcon());
         folderMapper.updateById(folder);
+        // 更新文件夹后同步到 ES
+        kafkaProducer.sendSearchSync("UPDATE", "folder", folderId);
         return toTreeResponse(folder);
     }
 
@@ -252,6 +258,8 @@ public class FolderService {
         // 校验权限：确保文件夹存在且属于当前用户
         getFolderForUser(userId, folderId);
         folderMapper.deleteById(folderId);
+        // 删除文件夹后从 ES 中删除
+        kafkaProducer.sendSearchSync("DELETE", "folder", folderId);
     }
 
     /**
@@ -307,6 +315,8 @@ public class FolderService {
         }
         folder.setParentId(request.getParentId());
         folderMapper.updateById(folder);
+        // 移动文件夹后同步 ES
+        kafkaProducer.sendSearchSync("UPDATE", "folder", folderId);
     }
 
     /**

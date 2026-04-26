@@ -18,7 +18,10 @@
       </div>
     </div>
 
-    <!-- 中间：导航链接 -->
+    <!-- 中间：搜索框 -->
+    <SearchBar />
+
+    <!-- 导航链接 -->
     <nav class="navbar-links">
       <router-link to="/" class="nav-link" :class="{ active: route.path === '/' }">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -98,6 +101,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import SearchBar from '@/components/SearchBar.vue'
 
 defineProps({
   showSidebarToggle: { type: Boolean, default: false }
@@ -204,7 +208,7 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-left: 32px;
+  margin-left: 24px;
 }
 
 .nav-link {

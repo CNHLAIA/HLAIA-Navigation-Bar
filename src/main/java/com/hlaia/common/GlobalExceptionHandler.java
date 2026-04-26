@@ -1,6 +1,7 @@
 package com.hlaia.common;
 
 import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 处理流程：
  *   Controller 方法抛出异常 → Spring 捕获 → GlobalExceptionHandler 匹配对应方法 → 返回 Result JSON
  */
+@Slf4j
 @RestControllerAdvice   // 告诉 Spring：这是一个全局异常处理组件
 public class GlobalExceptionHandler {
 
@@ -117,6 +119,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)  // 匹配所有异常
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)  // HTTP 500 服务器内部错误
     public Result<Void> handleException(Exception e) {
+        // 必须打印堆栈，否则 500 错误无法排查！
+        log.error("未处理异常", e);
         return Result.error(500, "Internal server error: " + e.getMessage());
     }
 }

@@ -68,6 +68,14 @@ export default {
     settings: '设置',
     signOut: '退出登录'
   },
+  search: {
+    placeholder: '搜索书签或文件夹...',
+    noResults: '未找到匹配结果',
+    resultsTitle: '搜索结果：{keyword}',
+    bookmark: '书签',
+    folder: '文件夹',
+    totalResults: '共 {total} 条结果'
+  },
   bookmarks: {
     loading: '正在加载书签...',
     addBookmark: '添加书签',

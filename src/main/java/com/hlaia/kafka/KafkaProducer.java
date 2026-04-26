@@ -143,4 +143,39 @@ public class KafkaProducer {
         kafkaTemplate.send("operation-log", userId.toString(), message);
         log.info("Sent operation log: {} {} by user {}", action, target, userId);
     }
+
+    /**
+     * 发送"书签 ES 同步"消息
+     *
+     * 数据同步流程：
+     *   1. BookmarkService 在增删改书签后调用此方法
+     *   2. 消息发送到 Kafka 的 "search-sync" topic
+     *   3. SearchSyncConsumer 消费消息，根据操作类型更新 ES 索引
+     *
+     * 为什么用 "search-sync" 而不是 "bookmark-es-sync"？
+     *   使用统一的 topic 名称，书签和文件夹的同步都发到同一个 topic，
+     *   通过消息中的 type 字段区分是书签还是文件夹。
+     *   这样只需要一个 Consumer、一个 Topic，简化架构。
+     *
+     * 消息格式：
+     *   {"action":"CREATE","type":"bookmark","id":123}
+     *   - action: 操作类型（CREATE / UPDATE / DELETE）
+     *   - type: 数据类型（bookmark / folder）
+     *   - id: 数据 ID（消费者根据 ID 从 MySQL 查询最新数据，再写入 ES）
+     *
+     * 为什么不直接把完整数据放在消息里，而是只传 ID？
+     *   1. 解耦：消费者从 MySQL 查询最新数据，保证 ES 和 MySQL 完全一致
+     *   2. 减少消息体积：只传 ID，消息更小
+     *   3. 避免数据不一致：如果消息中的数据和 MySQL 不一致（比如被并发修改），
+     *      直接用消息数据写入 ES 会导致 ES 和 MySQL 不同步
+     *
+     * @param action 操作类型（CREATE / UPDATE / DELETE）
+     * @param type   数据类型（bookmark / folder）
+     * @param id     数据 ID
+     */
+    public void sendSearchSync(String action, String type, Long id) {
+        String message = "{\"action\":\"" + action + "\",\"type\":\"" + type + "\",\"id\":" + id + "}";
+        kafkaTemplate.send("search-sync", id.toString(), message);
+        log.info("Sent search sync: {} {} {}", action, type, id);
+    }
 }

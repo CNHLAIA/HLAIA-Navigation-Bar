@@ -145,6 +145,9 @@ public class BookmarkService {
         // 这是一个非阻塞操作，不会影响接口响应速度
         kafkaProducer.sendIconFetchTask(bookmark.getId(), bookmark.getUrl());
 
+        // ============ 第五步：发送 ES 同步消息 ============
+        // 创建书签后，需要把新书签同步到 Elasticsearch，这样用户才能搜到它
+        kafkaProducer.sendSearchSync("CREATE", "bookmark",  bookmark.getId());
         return toResponse(bookmark);
     }
 
@@ -170,6 +173,8 @@ public class BookmarkService {
         if (request.getDescription() != null) bookmark.setDescription(request.getDescription());
         if (request.getIconUrl() != null) bookmark.setIconUrl(request.getIconUrl());
         bookmarkMapper.updateById(bookmark);
+        // 更新书签后，同步到 ES
+        kafkaProducer.sendSearchSync("UPDATE", "bookmark", bookmarkId);
         return toResponse(bookmark);
     }
 
@@ -192,6 +197,8 @@ public class BookmarkService {
         // 校验权限：确保书签存在且属于当前用户
         getBookmarkForUser(userId, bookmarkId);
         bookmarkMapper.deleteById(bookmarkId);
+        // 删除书签后，从 ES 中也删除对应的文档
+        kafkaProducer.sendSearchSync("DELETE", "bookmark", bookmarkId);
     }
 
     /**
@@ -252,6 +259,10 @@ public class BookmarkService {
         // deleteBatchIds 是 MyBatis-Plus 提供的批量删除方法
         // 底层会生成 SQL: DELETE FROM bookmark WHERE id IN (?, ?, ?)
         bookmarkMapper.deleteBatchIds(request.getIds());
+        // 批量删除后，逐个发送 ES 同步消息
+        for (Long id : request.getIds()) {
+            kafkaProducer.sendSearchSync("DELETE", "bookmark", id);
+        }
     }
 
     /**
@@ -328,6 +339,8 @@ public class BookmarkService {
             bookmark.setFolderId(request.getTargetFolderId());
             bookmark.setSortOrder(nextSortOrder++);
             bookmarkMapper.updateById(bookmark);
+            // 移动书签后同步 ES（folderId 变了）
+            kafkaProducer.sendSearchSync("UPDATE", "bookmark", bookmark.getId());
         }
     }
 

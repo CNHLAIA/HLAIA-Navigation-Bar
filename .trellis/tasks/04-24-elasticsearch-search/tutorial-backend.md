@@ -539,6 +539,7 @@ public class FolderDocument {
 打开 `src/main/java/com/hlaia/service/BookmarkService.java`，在以下方法的末尾添加同步调用：
 
 **在 createBookmark 方法中**（`return toResponse(bookmark);` 之前添加）：
+
 ```java
         // ============ 第五步：发送 ES 同步消息 ============
         // 创建书签后，需要把新书签同步到 Elasticsearch，这样用户才能搜到它
@@ -546,6 +547,7 @@ public class FolderDocument {
 ```
 
 **在 updateBookmark 方法中**（`return toResponse(bookmark);` 之前添加）：
+
 ```java
         // 更新书签后，同步到 ES
         kafkaProducer.sendSearchSync("UPDATE", "bookmark", bookmarkId);
@@ -576,6 +578,7 @@ public class FolderDocument {
 打开 `src/main/java/com/hlaia/service/FolderService.java`，在以下方法中添加：
 
 **在 createFolder 方法中**（`return toTreeResponse(folder);` 之前添加）：
+
 ```java
         // 创建文件夹后同步 ES
         kafkaProducer.sendSearchSync("CREATE", "folder", folder.getId());
@@ -594,6 +597,7 @@ public class FolderDocument {
 ```
 
 > **注意**：FolderService 目前没有注入 KafkaProducer。你需要在 FolderService 的字段中添加：
+>
 > ```java
 > private final com.hlaia.kafka.KafkaProducer kafkaProducer;
 > ```
