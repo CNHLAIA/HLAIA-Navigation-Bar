@@ -48,6 +48,7 @@ public enum ErrorCode {
     USER_BANNED(2005, "User is banned"),                // 用户已被封禁
     ACCESS_DENIED(2006, "Access denied"),               // 无权操作该资源
     RATE_LIMITED(2007, "Too many requests"),            // 请求过于频繁（限流）
+    BOOKMARK_DUPLICATE(2009, "Bookmark already exists"), // 书签已存在（同一用户相同 URL）
     IMPORT_FAILED(2008, "Bookmark import failed"),      // 书签导入失败
 
     // ========== 自定义错误码 (9999 - 99999) (练习用) ==========

@@ -118,6 +118,17 @@ public class BookmarkService {
      */
     @Transactional
     public BookmarkResponse createBookmark(Long userId, BookmarkCreateRequest request) {
+        // ============ 第零步：检查是否重复 ============
+        // 唯一约束为 (user_id, folder_id, url)，同一文件夹内不能重复收藏相同 URL。
+        long exists = bookmarkMapper.selectCount(
+                new LambdaQueryWrapper<Bookmark>()
+                        .eq(Bookmark::getUserId, userId)
+                        .eq(Bookmark::getFolderId, request.getFolderId())
+                        .eq(Bookmark::getUrl, request.getUrl()));
+        if (exists > 0) {
+            throw new BusinessException(ErrorCode.BOOKMARK_DUPLICATE);
+        }
+
         // ============ 第一步：构建 Entity 对象 ============
         Bookmark bookmark = new Bookmark();
         bookmark.setUserId(userId);
