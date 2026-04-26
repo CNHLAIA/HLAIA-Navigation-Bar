@@ -2,7 +2,7 @@
 # 多阶段构建 - Stage 1: 构建阶段
 # 使用 JDK 镜像编译 Spring Boot 项目
 # ============================================================
-FROM eclipse-temurin:17-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 
 # 设置工作目录
 WORKDIR /app
@@ -29,7 +29,7 @@ RUN ./mvnw package -DskipTests -B
 # 多阶段构建 - Stage 2: 运行阶段
 # 使用更轻量的 JRE 镜像，减小最终镜像体积
 # ============================================================
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 
 WORKDIR /app
 
