@@ -33,6 +33,8 @@
         v-model="treeData"
         group="folders"
         :animation="200"
+        :delay="300"
+        :delay-on-touch-only="true"
         ghost-class="drag-ghost"
         drag-class="drag-active"
         @end="handleDragEnd"
@@ -360,6 +362,8 @@ const FolderTreeNode = defineComponent({
               'onUpdate:modelValue': (val) => { props.node.children = val },
               group: 'folders',
               animation: 200,
+              delay: 300,
+              delayOnTouchOnly: true,
               ghostClass: 'drag-ghost',
               dragClass: 'drag-active',
               class: 'tree-node-children',

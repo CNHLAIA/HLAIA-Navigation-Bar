@@ -161,9 +161,9 @@ async function refreshFolderMenus() {
       contexts: ['page', 'link']
     });
 
-    // 递归创建文件夹菜单项
-    // 文件夹树是嵌套结构：FolderTreeResponse.children 包含子文件夹
-    createFolderMenus(folders, PARENT_MENU_ID);
+    // 扁平化创建文件夹菜单项
+    // 文件夹树是嵌套结构，但菜单是扁平的，用路径名（如 "工作资料 > 前端"）表示层级
+    createFlatFolderMenus(folders, PARENT_MENU_ID);
 
     // 记录刷新时间
     lastFolderRefresh = now;
@@ -174,43 +174,48 @@ async function refreshFolderMenus() {
 }
 
 /**
- * 递归创建文件夹的上下文菜单项
+ * 将文件夹树扁平化，创建单层上下文菜单项
  *
- * @param {Array} folders - 文件夹列表（FolderTreeResponse 数组）
- * @param {string} parentId - 父菜单项的 ID（用于创建嵌套子菜单）
+ * 为什么用扁平化而不是嵌套菜单？
+ *   Chrome 右键菜单有嵌套深度限制（约 6-7 层），超过限制的子文件夹会被静默丢弃。
+ *   扁平化后，所有文件夹都显示在一级菜单下，用路径名表示层级关系，
+ *   例如 "工作资料 > 前端 > Vue" 表示 Vue 是"工作资料/前端"下的子文件夹。
  *
- * 文件夹树是递归结构：
- *   工作资料 (id=1)
- *   ├── 前端 (id=2)
- *   │   └── Vue (id=4)
- *   └── 后端 (id=3)
- *
- * 对应的菜单结构：
- *   收藏到 HLAIA 导航栏
- *   ├── 保存到暂存区
- *   ├── ──────────
- *   ├── 工作资料
- *   │   ├── 前端
- *   │   │   └── Vue
- *   │   └── 后端
+ * @param {Array} folders - 文件夹树（FolderTreeResponse 数组，含 children）
+ * @param {string} parentId - 父菜单项的 ID（固定为 PARENT_MENU_ID）
  */
-function createFolderMenus(folders, parentId) {
+function createFlatFolderMenus(folders, parentId) {
   if (!folders || folders.length === 0) return;
 
-  for (const folder of folders) {
-    const menuId = `${FOLDER_MENU_PREFIX}${folder.id}`;
+  /**
+   * 递归遍历文件夹树，收集所有文件夹的扁平列表
+   * @param {Array} nodes - 当前层级的文件夹数组
+   * @param {string} path - 当前路径前缀（用于拼接显示名称）
+   * @param {Array} result - 收集结果的数组
+   */
+  function flatten(nodes, path, result) {
+    for (const node of nodes) {
+      const displayName = path ? `${path} > ${node.name || '未命名文件夹'}` : (node.name || '未命名文件夹');
+      result.push({ id: node.id, displayName });
+      if (node.children && node.children.length > 0) {
+        flatten(node.children, displayName, result);
+      }
+    }
+  }
 
+  const flatList = [];
+  flatten(folders, '', flatList);
+
+  // 按 displayName 排序，让同一父级下的文件夹排列在一起
+  flatList.sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-CN'));
+
+  for (const item of flatList) {
     chrome.contextMenus.create({
-      id: menuId,
+      id: `${FOLDER_MENU_PREFIX}${item.id}`,
       parentId: parentId,
-      title: folder.name || '未命名文件夹',
+      title: item.displayName,
       contexts: ['page', 'link']
     });
-
-    // 递归创建子文件夹的菜单项
-    if (folder.children && folder.children.length > 0) {
-      createFolderMenus(folder.children, menuId);
-    }
   }
 }
 

@@ -73,6 +73,8 @@
         v-if="bookmarkStore.bookmarks.length > 0"
         v-model="gridData"
         :animation="200"
+        :delay="300"
+        :delay-on-touch-only="true"
         ghost-class="grid-drag-ghost"
         class="bookmark-grid"
         @end="handleDragEnd"
