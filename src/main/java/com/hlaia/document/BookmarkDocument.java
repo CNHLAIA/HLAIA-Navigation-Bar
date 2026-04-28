@@ -35,7 +35,7 @@ import java.time.LocalDateTime;
  *   单节点模式下如果设置副本 > 0，索引会一直处于"黄色"警告状态（因为副本无法分配）。
  */
 @Data
-@Document(indexName = "bookmark")
+@Document(indexName = "hlaia_nav_bookmark")
 @Setting(shards = 1, replicas = 0)
 public class BookmarkDocument {
 
@@ -61,12 +61,11 @@ public class BookmarkDocument {
      *   Keyword 类型不会分词，整个值作为一个整体建立索引。
      *   适合精确匹配，如用户 ID、状态码等。
      *
-     * analyzer = "standard"：
-     *   指定索引时使用的分词器。standard 是 ES 默认的分词器，
-     *   对英文按空格和标点分词，对中文按单个字分词。
-     *   注意：standard 对中文的分词效果不好（每个字一个词），
-     *   生产环境通常会换成 ik_max_word（中文智能分词插件），
-     *   但 ik 插件需要单独安装，MVP 阶段先用 standard。
+     * analyzer = "ik_max_word" / searchAnalyzer = "ik_smart"：
+     *   IK 中文分词插件提供的分词器组合。
+     *   ik_max_word（索引时）：最细粒度切分，穷举所有可能的词组组合。
+     *   ik_smart（搜索时）：最粗粒度切分，返回最合理的分词结果。
+     *   这种"索引细、搜索粗"的策略是中文搜索的最佳实践。
      */
     @Field(type = FieldType.Long)
     private Long userId;
@@ -76,28 +75,35 @@ public class BookmarkDocument {
 
     /**
      * 书签标题 —— 全文搜索的主要字段
-     * 使用 Text 类型支持分词搜索，同时配置了 searchAnalyzer
-     * analyzer：索引时使用的分词器（写入数据时如何分词）
-     * searchAnalyzer：搜索时使用的分词器（用户输入的关键词如何分词）
-     * 大多数情况下两者相同，但某些场景下可以不同（如搜索时用更粗粒度的分词）
+     *
+     * analyzer = "ik_max_word"：索引时使用最细粒度切分
+     *   例如 "前端开发工具" → ["前端开发工具", "前端开发", "开发工具", "前端", "开发", "工具"]
+     *   穷举所有可能的词组组合，确保搜索时能从各种角度命中
+     *
+     * searchAnalyzer = "ik_smart"：搜索时使用最粗粒度切分
+     *   例如用户搜 "前端" → ["前端"]，直接在索引中精准匹配
+     *
+     * 为什么索引和搜索用不同分词器？（"索引细、搜索粗"策略）
+     *   如果都用 ik_max_word：搜索"前端开发"会被切分为 ["前端","开发"]，
+     *   做默认 OR 匹配，可能匹配到只含"前端"但不相关的文档
+     *   如果都用 ik_smart：文档"前端开发工具"可能只被切分为 ["前端开发工具"]，
+     *   用户搜"前端"就搜不到（因为"前端"不在索引词条中）
+     *   所以索引要细（尽量多建词条），搜索要粗（精准匹配）
      */
-    @Field(type = FieldType.Text, analyzer = "standard")
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String title;
 
     /**
-     * URL —— 使用 Keyword 类型
-     * URL 通常不需要分词搜索（用户不会搜 "https://com"），
-     * 但用户可能想搜域名，所以也添加 Text 类型的子字段
-     *
-     * 不过为简化，MVP 阶段 URL 也用 Text 类型
+     * URL —— 用户可能想搜域名（如 "github.com"），所以也做全文搜索
+     * 中文分词器对 URL 也能正常工作（按标点、斜杠等自然分割）
      */
-    @Field(type = FieldType.Text, analyzer = "standard")
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String url;
 
     /**
      * 描述 —— 全文搜索的辅助字段
      */
-    @Field(type = FieldType.Text, analyzer = "standard")
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String description;
 
     /**

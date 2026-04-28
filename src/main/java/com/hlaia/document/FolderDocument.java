@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
  * 但搜索结果需要展示 icon、parentId 等信息，所以也要包含这些字段。
  */
 @Data
-@Document(indexName = "folder")
+@Document(indexName = "hlaia_nav_folder")
 @Setting(shards = 1, replicas = 0)
 public class FolderDocument {
 
@@ -31,8 +31,9 @@ public class FolderDocument {
 
     /**
      * 文件夹名称 —— 文件夹的主要搜索字段
+     * 使用 IK 分词器，与 BookmarkDocument 保持一致的中文分词策略
      */
-    @Field(type = FieldType.Text, analyzer = "standard")
+    @Field(type = FieldType.Text, analyzer = "ik_max_word", searchAnalyzer = "ik_smart")
     private String name;
 
     @Field(type = FieldType.Keyword)
