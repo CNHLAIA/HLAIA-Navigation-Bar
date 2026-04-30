@@ -48,6 +48,16 @@
         </div>
         <div v-if="folderId" class="grid-top-actions">
           <button
+            class="refresh-btn"
+            :title="t('bookmarks.refresh')"
+            @click="handleRefresh"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1.5 7a5.5 5.5 0 0 1 9.37-3.9M12.5 7a5.5 5.5 0 0 1-9.37 3.9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M11 1.5v2.5H8.5M3 10v2.5h2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button
             class="import-bookmark-btn"
             @click="openImportDialog"
           >
@@ -132,6 +142,13 @@
             <path d="M9.625 2.125l2.25 2.25M1.75 10.25l-.5 2.5 2.5-.5L12.125 3.875a1.591 1.591 0 0 0-2.25-2.25L1.75 10.25z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           {{ t('bookmarks.contextMenu.edit') }}
+        </button>
+        <button class="ctx-item" @click="handleCopyUrl">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M5.25 8.75L9 5M9 5H6.75M9 5v2.25" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4.667 1.75h4.666a2.333 2.333 0 0 1 2.334 2.333v4.667a2.333 2.333 0 0 1-2.334 2.333H4.667a2.333 2.333 0 0 1-2.334-2.333V4.083a2.333 2.333 0 0 1 2.334-2.333z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          {{ t('bookmarks.contextMenu.copyUrl') }}
         </button>
         <button class="ctx-item" @click="handleMoveToFolder">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -510,6 +527,30 @@ function handleEdit() {
 }
 
 /**
+ * 从右键菜单复制书签网址到剪贴板
+ */
+async function handleCopyUrl() {
+  const bm = contextMenu.value.bookmark
+  if (!bm) return
+  contextMenu.value.visible = false
+  try {
+    await navigator.clipboard.writeText(bm.url)
+    ElMessage.success(t('bookmarks.contextMenu.copyUrlSuccess'))
+  } catch {
+    ElMessage.error(t('bookmarks.contextMenu.copyUrlFailed'))
+  }
+}
+
+/**
+ * 刷新当前文件夹的书签列表
+ */
+function handleRefresh() {
+  if (props.folderId) {
+    bookmarkStore.fetchBookmarks(props.folderId)
+  }
+}
+
+/**
  * 从右键菜单删除书签
  */
 async function handleContextDelete() {
@@ -790,6 +831,32 @@ async function handleDragEnd() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ---- 刷新按钮 ---- */
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--hlaia-radius);
+  border: 1px solid var(--hlaia-border);
+  background: var(--hlaia-surface);
+  color: var(--hlaia-text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: var(--hlaia-surface-light);
+  border-color: var(--hlaia-primary-light);
+  color: var(--hlaia-primary);
+}
+
+.refresh-btn:active {
+  transform: rotate(180deg);
+  transition: transform 0.3s ease;
 }
 
 /* ---- 导入书签按钮 ---- */

@@ -87,10 +87,14 @@ export default {
     },
     contextMenu: {
       edit: 'Edit',
+      copyUrl: 'Copy URL',
+      copyUrlSuccess: 'URL copied to clipboard',
+      copyUrlFailed: 'Failed to copy URL',
       delete: 'Delete',
       moveTo: 'Move to...',
       moveSelectedTo: 'Move selected to...'
     },
+    refresh: 'Refresh',
     editDialog: {
       title: 'Edit Bookmark'
     },

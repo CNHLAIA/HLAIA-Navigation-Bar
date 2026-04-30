@@ -87,10 +87,14 @@ export default {
     },
     contextMenu: {
       edit: '编辑',
+      copyUrl: '复制网址',
+      copyUrlSuccess: '网址已复制到剪贴板',
+      copyUrlFailed: '复制网址失败',
       delete: '删除',
       moveTo: '移动到...',
       moveSelectedTo: '移动选中到...'
     },
+    refresh: '刷新',
     editDialog: {
       title: '编辑书签'
     },
