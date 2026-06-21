@@ -1,0 +1,23 @@
+services:
+  hlaia-nav:
+    build: .
+    image: "${REGISTRY}/hlaia-navigation-bar:latest"
+    container_name: hlaia-nav
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      TZ: ${TZ:-Asia/Shanghai}
+
+  hlaia-nav-frontend:
+    build: ./frontend
+    image: "${REGISTRY}/hlaia-nav-frontend:latest"
+    container_name: hlaia-nav-frontend
+    restart: unless-stopped
+    ports:
+      - "13566:80"
+    environment:
+      TZ: Asia/Shanghai
+    depends_on:
+      - hlaia-nav

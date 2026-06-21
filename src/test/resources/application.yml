@@ -1,0 +1,12 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: HLAIANavigationBar
+  profiles:
+    active: dev
+
+app:
+  elasticsearch:
+    init-indices: false
