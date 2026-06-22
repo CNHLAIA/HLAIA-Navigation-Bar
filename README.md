@@ -147,12 +147,16 @@ npm run build
 在**能访问 Docker Hub** 的机器上运行同步脚本，把 4 个基础镜像推送到你的局域网 Registry：
 
 ```bash
-# 方式 1：从 .env 读取 REGISTRY
-./scripts/sync-base-images.sh
+# Windows (PowerShell)
+.\scripts\sync-base-images.ps1                          # 从 .env 读 REGISTRY
+.\scripts\sync-base-images.ps1 192.168.8.6:5000         # 显式指定 Registry
 
-# 方式 2：显式指定 Registry
-./scripts/sync-base-images.sh 192.168.8.6:5000
+# Linux / macOS / Git Bash
+./scripts/sync-base-images.sh                           # 从 .env 读 REGISTRY
+./scripts/sync-base-images.sh 192.168.8.6:5000          # 显式指定 Registry
 ```
+
+> **PowerShell 执行策略**：若遇 `无法加载文件...因为在此系统上禁止运行脚本`，用 `powershell -ExecutionPolicy Bypass -File .\scripts\sync-base-images.ps1` 放行（仅当前会话生效，安全）。
 
 脚本会拉取 `eclipse-temurin:25-jdk-alpine`、`eclipse-temurin:25-jre-alpine`、`node:20-alpine`、`nginx:alpine`，重新打标签后推送到局域网 Registry。完成后构建机就不再需要外网。
 
