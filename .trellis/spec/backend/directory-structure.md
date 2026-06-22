@@ -73,13 +73,11 @@ src/main/java/com/hlaia/
 ├── aspect/              # AOP 切面
 │   ├── RateLimitAspect.java      # 限流切面
 │   └── OperationLogAspect.java   # 操作日志切面
-├── kafka/               # Kafka 消息生产者和消费者
-│   ├── KafkaProducer.java            # 消息生产者
-│   ├── OperationLogConsumer.java     # 操作日志消费者
-│   ├── StagingCleanupConsumer.java   # 暂存区清理消费者
-│   └── IconFetchConsumer.java        # 网站图标获取消费者
+├── event/               # Spring 应用事件（事务后置 ES 同步）
+│   ├── SearchSyncEvent.java          # ES 同步事件载体
+│   └── SearchSyncEventListener.java  # 事务提交后写 ES
 ├── scheduled/           # 定时任务
-│   └── StagingCleanupScheduler.java  # 暂存区过期清理定时任务
+│   └── StagingCleanupScheduler.java  # 暂存区过期清理定时任务（直接批量删除）
 └── HlaiaNavigationBarApplication.java  # Spring Boot 启动类
 ```
 
@@ -177,7 +175,7 @@ Service 层负责：
 2. 调用 Mapper 进行数据库操作
 3. Entity <-> DTO 转换（通过 private 的 `toResponse()` 方法）
 4. 事务管理（`@Transactional`）
-5. 调用 KafkaProducer 发送异步消息
+5. 触发异步任务（favicon 抓取走 `@Async` 虚拟线程）和 ES 同步事件（`SearchSyncEvent`，事务提交后由监听器写 ES）
 
 ### Mapper 层 -- 纯数据访问
 
@@ -209,7 +207,8 @@ Mapper 接口只继承 `BaseMapper<T>`，不添加自定义方法。所有查询
 @RequiredArgsConstructor
 public class BookmarkService {
     private final BookmarkMapper bookmarkMapper;
-    private final KafkaProducer kafkaProducer;
+    private final IconFetchService iconFetchService;
+    private final ApplicationEventPublisher eventPublisher;
     // ...
 }
 ```

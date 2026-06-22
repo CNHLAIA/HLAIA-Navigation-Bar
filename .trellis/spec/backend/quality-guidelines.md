@@ -98,7 +98,8 @@ return Result.success();
 @RequiredArgsConstructor
 public class BookmarkService {
     private final BookmarkMapper bookmarkMapper;
-    private final KafkaProducer kafkaProducer;
+    private final IconFetchService iconFetchService;
+    private final ApplicationEventPublisher eventPublisher;
 }
 ```
 
@@ -166,7 +167,7 @@ public class BookmarkController {
 | `@AllArgsConstructor` | 有全参构造需求的类 | ErrorCode 枚举 |
 | `@RequiredArgsConstructor` | 依赖注入的类 | Service、Controller、Aspect、Component |
 | `@Builder` | 需要链式创建的类 | AuthResponse |
-| `@Slf4j` | 需要日志的类 | KafkaProducer、Consumer |
+| `@Slf4j` | 需要日志的类 | Service、Consumer |
 
 ---
 
@@ -248,7 +249,6 @@ class HlaiaNavigationBarApplicationTests {
 
 - `spring-boot-starter-test` -- Spring Boot 测试框架
 - `spring-security-test` -- Spring Security 测试支持
-- `spring-kafka-test` -- Kafka 测试支持（嵌入式 Kafka）
 - `h2` -- 内存数据库，用于测试环境
 
 ### 测试配置

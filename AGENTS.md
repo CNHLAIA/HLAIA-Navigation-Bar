@@ -9,7 +9,7 @@ NavigationBar 是一个书签导航栏 Web 应用 + Chromium 浏览器扩展插�
 
 | 层级 | 技术 |
 |------|------|
-| 后端 | Spring Boot 4.0.5, Java 25, MyBatis-Plus 3.5.15, MySQL 8, Redis 7, Kafka |
+| 后端 | Spring Boot 4.0.5, Java 25, MyBatis-Plus 3.5.15, MySQL 8, Redis 7 |
 | 认证 | Spring Security + JWT (jjwt 0.12.6) |
 | 数据库迁移 | Flyway |
 | API 文档 | SpringDoc OpenAPI 3.0.1 (Swagger UI) |

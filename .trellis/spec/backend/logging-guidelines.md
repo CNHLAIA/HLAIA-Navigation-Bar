@@ -9,7 +9,7 @@
 本项目有两种日志机制：
 
 1. **应用日志（SLF4J）**: 通过 `@Slf4j` 注解在代码中直接输出日志，用于调试和问题排查
-2. **操作日志（AOP + Kafka + 数据库）**: 通过 `OperationLogAspect` 切面自动记录用户操作，用于安全审计
+2. **操作日志（AOP + @Async + 数据库）**: 通过 `OperationLogAspect` 切面自动记录用户操作，用于安全审计
 
 ---
 
@@ -21,33 +21,35 @@
 
 ```java
 @Slf4j
-@Component
-public class KafkaProducer {
-    public void sendIconFetchTask(Long bookmarkId, String url) {
+@Service
+public class IconFetchService {
+    public void fetchAndSaveIcon(Long bookmarkId, String url) {
         // ...
-        log.info("Sent icon fetch task for bookmark {}", bookmarkId);
+        log.info("Updated icon for bookmark {}: {}", bookmarkId, iconUrl);
     }
 }
 ```
 
 ### 使用 @Slf4j 的文件
 
-当前项目中使用 `@Slf4j` 的类：
-- `src/main/java/com/hlaia/kafka/KafkaProducer.java` -- Kafka 消息发送日志
-- `src/main/java/com/hlaia/kafka/OperationLogConsumer.java` -- 消费者处理日志
+当前项目中使用 `@Slf4j` 的类（典型代表）：
+- `src/main/java/com/hlaia/service/IconFetchService.java` -- favicon 抓取日志
+- `src/main/java/com/hlaia/service/OperationLogService.java` -- 操作日志写入失败告警
+- `src/main/java/com/hlaia/service/SearchSyncService.java` -- ES 同步日志
+- `src/main/java/com/hlaia/service/SearchService.java` -- 全量重建索引日志
 
 ### 日志级别使用规范
 
 | 级别 | 使用场景 | 示例 |
 |------|---------|------|
-| `log.info()` | 关键业务操作的成功记录 | Kafka 消息发送成功、消费成功 |
-| `log.error()` | 操作失败但不影响系统运行 | 消费者处理消息失败 |
-| `log.warn()` | 异常但可恢复的情况 | 当前代码中未使用，但 `OperationLogAspect` 的 catch 块建议添加 |
-| `log.debug()` | 开发调试信息 | 当前代码中未使用 |
+| `log.info()` | 关键业务操作的成功记录 | favicon 回填成功、ES 同步成功 |
+| `log.warn()` | 异常但可恢复的情况 | 操作日志写入失败、ES 同步失败（事务已提交，靠 reindex 兜底） |
+| `log.error()` | 操作失败但不影响系统运行 | 当前主要用于非业务路径 |
+| `log.debug()` | 开发调试信息 | SSRF 防护拒绝的 URL、favicon 解析失败细节 |
 
 ### 日志格式约定
 
-- 使用 `{}` 占位符而非字符串拼接：`log.info("Sent task for bookmark {}", bookmarkId)`
+- 使用 `{}` 占位符而非字符串拼接：`log.info("Synced bookmark {} to ES", id)`
 - 日志消息使用英文
 - 包含足够的上下文信息（如资源 ID、用户 ID）
 
@@ -66,11 +68,9 @@ OperationLogAspect.logOperation()
     ↓ 先执行目标方法
 joinPoint.proceed()
     ↓ 成功后记录日志
-kafkaProducer.sendOperationLog(userId, action, target)
-    ↓ 异步发送到 Kafka
-Kafka Topic "operation-log"
-    ↓ 消费者异步消费
-OperationLogConsumer.consume()
+operationLogService.record(userId, action, target)
+    ↓ @Async 虚拟线程异步执行
+OperationLogService.record()
     ↓ 写入数据库
 operation_log 表
 ```
@@ -91,8 +91,8 @@ public Object logOperation(ProceedingJoinPoint joinPoint) throws Throwable {
     Object result = joinPoint.proceed();  // 先执行业务方法
     try {
         // 提取用户 ID、方法名、类名
-        // 通过 Kafka 异步发送日志
-        kafkaProducer.sendOperationLog(userId, action, target);
+        // 通过 OperationLogService 异步写库（@Async 虚拟线程）
+        operationLogService.record(userId, action, target);
     } catch (Exception e) {
         // 日志记录失败不影响业务（catch 吞掉异常）
     }
@@ -106,14 +106,20 @@ public Object logOperation(ProceedingJoinPoint joinPoint) throws Throwable {
 2. 用户未登录时没有 userId，日志信息不完整
 3. 登录操作属于认证行为，不属于"业务操作"
 
-### 日志写入数据库
+### OperationLogService 落库
 
-参考 `src/main/java/com/hlaia/kafka/OperationLogConsumer.java`：
+参考 `src/main/java/com/hlaia/service/OperationLogService.java`：
 
-- 消费 Kafka Topic `"operation-log"`，groupId 为 `"hlaia-nav"`
-- 解析 JSON 消息，创建 `OperationLog` 实体，插入数据库
-- `createdAt` 使用服务器当前时间（而非消息发送时间）
-- 消费者异常只记录日志不向上抛出
+- 方法 `record(userId, action, target)` 标注 `@Async`，在虚拟线程后台执行
+- 直接 `operationLogMapper.insert()` 写入 `operation_log` 表（不再经过消息队列）
+- `createdAt` 使用服务器当前时间（异步方法可能因线程调度延迟执行）
+- 方法内部 try/catch 兜底，失败仅 `log.warn`，不向上抛
+
+### 为什么不再用 Kafka？
+
+历史版本曾用 `KafkaProducer → operation-log Topic → OperationLogConsumer` 的链路异步写库。
+但消费者最终也是写同一个 MySQL，绕一圈消息队列反而增加了网络跳、JSON 序列化和 MQ 持久化开销，
+还多了一个 Kafka 单点故障。单体内 `@Async` 直接写库最简单可靠。
 
 ---
 
@@ -161,25 +167,9 @@ CREATE TABLE IF NOT EXISTS `operation_log` (
 - catch 块捕获 Exception（不是 Throwable），Error 级别的异常不吞掉
 - 业务方法已成功执行（`proceed()` 在 try 之前调用），返回值不受影响
 
-在 `OperationLogConsumer` 中体现为：
-- 消费者异常只记录 `log.error()`，不向上抛出
-- 单条消息处理失败不影响后续消息的消费
-
----
-
-## Kafka 消息日志
-
-参考 `src/main/java/com/hlaia/kafka/KafkaProducer.java`，消息发送后使用 `log.info` 记录：
-
-```java
-public void sendIconFetchTask(Long bookmarkId, String url) {
-    String message = "{\"bookmarkId\":" + bookmarkId + ",\"url\":\"" + url + "\"}";
-    kafkaTemplate.send("bookmark-icon-fetch", bookmarkId.toString(), message);
-    log.info("Sent icon fetch task for bookmark {}", bookmarkId);
-}
-```
-
-Kafka 消息格式使用手动拼接的 JSON 字符串（非 JSON 库），因为消息结构简单，不需要额外依赖。
+在 `OperationLogService.record()` 中体现为：
+- 方法内部 try/catch 兜底，失败仅 `log.warn`，不向上抛
+- 单条日志写入失败不影响后续请求
 
 ---
 
@@ -189,3 +179,6 @@ Kafka 消息格式使用手动拼接的 JSON 字符串（非 JSON 库），因�
 2. **日志中使用字符串拼接而非占位符**: `log.info("id=" + id)` 应改为 `log.info("id={}", id)`
 3. **在 catch 块中不记录日志就吞掉异常**: `OperationLogAspect` 的 catch 块目前是空的，建议添加 `log.warn()`
 4. **记录敏感信息**: 绝不在日志中输出密码、Token 等敏感数据
+5. **`@Async` 方法自调用**: Spring 的 `@Async` 通过代理生效，必须在不同的 Bean 之间调用。
+   `OperationLogAspect → OperationLogService` 是跨 Bean 调用，天然走代理；切勿在同一个类内部
+   直接调用本类的 `@Async` 方法，那样会退化成同步执行。

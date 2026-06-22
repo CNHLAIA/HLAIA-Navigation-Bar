@@ -21,8 +21,8 @@
 | ORM | MyBatis-Plus 3.5.15 (mybatis-plus-spring-boot4-starter) |
 | 数据库 | MySQL 8 |
 | 缓存 | Redis 7 (Spring Data Redis) |
-| 消息队列 | Kafka (spring-boot-starter-kafka) |
 | 搜索引擎 | Elasticsearch (Spring Data Elasticsearch) |
+| 异步处理 | 虚拟线程（@Async + SimpleAsyncTaskExecutor，Java 25） |
 | 认证 | Spring Security + JWT (jjwt 0.12.6) |
 | 数据库迁移 | Flyway |
 | API 文档 | SpringDoc OpenAPI 3.0.1 |
@@ -89,7 +89,7 @@ HLAIANavigationBar/
 - Node.js 20+
 - MySQL 8（或连接远程实例）
 - Redis 7
-- Kafka（可选，部分功能依赖）
+- Elasticsearch（搜索功能依赖）
 
 ### 后端
 
@@ -99,7 +99,7 @@ HLAIANavigationBar/
 CREATE DATABASE hlaia_nav_dev DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. 复制 `.env.example` 为 `.env`，再按你的环境填写数据库、Redis、Kafka、ES 和 JWT 配置。
+2. 复制 `.env.example` 为 `.env`，再按你的环境填写数据库、Redis、ES 和 JWT 配置。
 
 3. 启动后端服务：
 
@@ -132,7 +132,7 @@ npm run build
 
 ### 前提条件
 
-- 目标服务器已部署 MySQL、Redis、Kafka、Elasticsearch
+- 目标服务器已部署 MySQL、Redis、Elasticsearch
 - 已安装 Docker 和 Docker Compose
 - 局域网内已部署 Docker Registry
 
@@ -153,7 +153,7 @@ docker compose push
 
 **② 服务器（NAS）**
 
-1. 克隆仓库，复制 `.env.example` 为 `.env`，填写生产环境的数据库、Redis、Kafka、ES 和 JWT 配置，`REGISTRY` 与开发机保持一致。
+1. 克隆仓库，复制 `.env.example` 为 `.env`，填写生产环境的数据库、Redis、ES 和 JWT 配置，`REGISTRY` 与开发机保持一致。
 
 2. 拉取镜像并启动：
 
@@ -269,8 +269,6 @@ Docker Compose 会启动两个容器：
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | Redis 连接信息 | `localhost` / `6379` / 空 |
 | `REDIS_DATABASE` | Redis 库编号（dev/prod 共用 db 3，靠前缀隔离） | `3` |
 | `APP_REDIS_KEY_PREFIX` | Redis key 前缀（隔离 dev/prod） | profile 对应前缀（`hlaia_nav_dev:` / `hlaia_nav_prod:`） |
-| `KAFKA_BOOTSTRAP_SERVERS` | Kafka 连接地址 | `localhost:9092` |
-| `KAFKA_GROUP_ID_DEV` / `KAFKA_GROUP_ID_PROD` | Kafka 消费组 ID（按 profile 选择） | `hlaia-nav-dev` / `hlaia-nav` |
 | `ELASTICSEARCH_URI` | Elasticsearch 地址 | `http://localhost:9200` |
 | `JWT_SECRET` | JWT 签名密钥 | 无默认值，必须显式提供 |
 | `JWT_ACCESS_TOKEN_EXPIRATION` | Access Token 有效期（毫秒） | `86400000` |
