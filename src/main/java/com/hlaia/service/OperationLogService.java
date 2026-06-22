@@ -39,16 +39,18 @@ public class OperationLogService {
      * 异步记录一条操作日志
      *
      * @param userId 操作用户 ID（部分场景如系统自动操作可能为 null）
-     * @param action 操作类型（如 "createBookmark"、"deleteFolder"）
-     * @param target 操作目标（如 "BookmarkController.createBookmark"）
+     * @param action 操作类型，大写下划线常量（如 "BAN_USER"、"DELETE_FOLDER"），便于 SQL 检索
+     * @param target 操作定位（如 "AdminController.banUser"），便于反查代码位置
+     * @param detail 业务上下文（如 "banned user 5"），可为 null
      */
     @Async
-    public void record(Long userId, String action, String target) {
+    public void record(Long userId, String action, String target, String detail) {
         try {
             OperationLog logEntry = new OperationLog();
             logEntry.setUserId(userId);
             logEntry.setAction(action);
             logEntry.setTarget(target);
+            logEntry.setDetail(detail);
             // 使用服务器当前时间，而非请求时间——异步方法可能因线程调度延迟执行
             logEntry.setCreatedAt(LocalDateTime.now());
             operationLogMapper.insert(logEntry);

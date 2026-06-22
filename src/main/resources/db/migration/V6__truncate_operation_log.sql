@@ -1,0 +1,14 @@
+-- ============================================================
+-- 操作日志收窄到管理员审计：清空历史噪音数据
+-- ============================================================
+-- 背景：此前 OperationLogAspect 拦截所有 Controller 方法（除 AuthController），
+-- 导致 operation_log 表积累了大量用户改自己书签/文件夹的噪音日志，无审计价值。
+-- 本次重构把切面收窄到仅审计 AdminController 的越权写操作（ban/unban/deleteFolder）。
+--
+-- 为什么用 TRUNCATE 而不是 DELETE FROM：
+--   1. TRUNCATE 是 DDL，不记录逐行 undo 日志，清空大表远快于 DELETE
+--   2. TRUNCATE 自动重置 AUTO_INCREMENT 计数器，新日志从 id=1 开始
+--   3. operation_log 不参与外键关联，TRUNCATE 的外键限制不影响
+--
+-- 老数据已被评估为无价值（用户决策：清空），此迁移不可逆。
+TRUNCATE TABLE operation_log;
