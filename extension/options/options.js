@@ -8,7 +8,7 @@
  *   1. 输入用户名和密码登录（获取 JWT Token）
  *   2. 查看当前登录状态（用户名、角色）
  *   3. 退出登录（清除 Token）
- *   4. 配置 API 服务器地址（默认 http://localhost:8080）
+ *   4. 配置 API 服务器地址（默认 https://nav.hlaia.top）
  *
  * ============================================================
  * chrome.storage.local vs localStorage
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 loginBtn.addEventListener('click', async () => {
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
-  const serverUrl = serverUrlInput.value.trim() || 'http://localhost:8080';
+  const serverUrl = serverUrlInput.value.trim() || 'https://nav.hlaia.top';
 
   // 前端校验：用户名和密码不能为空
   if (!username || !password) {
@@ -120,7 +120,14 @@ loginBtn.addEventListener('click', async () => {
       });
 
       // 通知 background.js 用户已登录，让它立即刷新文件夹菜单
-      chrome.runtime.sendMessage({ type: 'LOGIN_SUCCESS' });
+      // 用 catch 兜底：Service Worker 在空闲时会被 Chrome 回收，
+      // 这一刻尚未唤醒时 sendMessage 会抛 "Receiving end does not exist"。
+      // 此时菜单会在下次切换标签页时自动刷新，所以静默忽略即可。
+      try {
+        chrome.runtime.sendMessage({ type: 'LOGIN_SUCCESS' });
+      } catch (e) {
+        console.warn('sendMessage LOGIN_SUCCESS failed (SW sleeping?):', e?.message || e);
+      }
 
       // 更新页面显示
       showLoggedIn(authData.username, authData.role);
@@ -169,7 +176,12 @@ logoutBtn.addEventListener('click', async () => {
   }
 
   // 通知 background.js 用户已登出
-  chrome.runtime.sendMessage({ type: 'LOGOUT' });
+  // 同 LOGIN_SUCCESS，SW 可能正处于休眠状态，sendMessage 会失败，静默忽略。
+  try {
+    chrome.runtime.sendMessage({ type: 'LOGOUT' });
+  } catch (e) {
+    console.warn('sendMessage LOGOUT failed (SW sleeping?):', e?.message || e);
+  }
 
   // 更新页面显示
   showLoginForm();
