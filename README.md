@@ -140,9 +140,27 @@ npm run build
 
 本项目采用「开发机构建镜像 → push 到局域网 Registry → 服务器 pull」的流程，服务器只负责拉取镜像，不在本地编译。
 
+> **关键设计**：基础镜像（eclipse-temurin / node / nginx）通过 `ARG REGISTRY` 参数化，Dockerfile 默认从 Docker Hub 拉取，但部署到内网时改从你的局域网 Registry 拉取——构建链路完全不依赖外网。
+
+**⓪ 一次性准备：同步基础镜像到局域网 Registry**（仅首次部署或基础镜像需要升级时执行）
+
+在**能访问 Docker Hub** 的机器上运行同步脚本，把 4 个基础镜像推送到你的局域网 Registry：
+
+```bash
+# 方式 1：从 .env 读取 REGISTRY
+./scripts/sync-base-images.sh
+
+# 方式 2：显式指定 Registry
+./scripts/sync-base-images.sh 192.168.8.6:5000
+```
+
+脚本会拉取 `eclipse-temurin:25-jdk-alpine`、`eclipse-temurin:25-jre-alpine`、`node:20-alpine`、`nginx:alpine`，重新打标签后推送到局域网 Registry。完成后构建机就不再需要外网。
+
+> **基础镜像升级**：Eclipse / Node / Nginx 社区会不定期发布安全补丁（约每季度一次）。重新运行同步脚本即可拉到最新版，建议定期执行。
+
 **① 开发机（Windows）**
 
-1. 在 `.env` 中配置 `REGISTRY`。
+1. 在 `.env` 中配置 `REGISTRY`（与服务器一致）。
 
 2. 构建并推送镜像：
 
@@ -150,6 +168,8 @@ npm run build
 docker compose build
 docker compose push
 ```
+
+`docker compose build` 时会自动把 `REGISTRY` 作为 build-arg 传给 Dockerfile，让 `FROM` 指向局域网 Registry，实现全内网构建。
 
 **② 服务器（NAS）**
 

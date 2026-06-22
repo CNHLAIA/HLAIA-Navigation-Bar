@@ -1,8 +1,16 @@
 # ============================================================
+# 基础镜像来源（参数化）
+# ============================================================
+# 默认 REGISTRY=docker.io/library：直接从 Docker Hub 拉取（需外网）
+# 内网构建时通过 --build-arg REGISTRY=<你的局域网Registry> 覆盖，
+# 从私有 Registry 拉取已同步的基础镜像（详见 scripts/sync-base-images.sh）
+ARG REGISTRY=docker.io/library
+
+# ============================================================
 # 多阶段构建 - Stage 1: 构建阶段
 # 使用 JDK 镜像编译 Spring Boot 项目
 # ============================================================
-FROM eclipse-temurin:25-jdk-alpine AS build
+FROM ${REGISTRY}/eclipse-temurin:25-jdk-alpine AS build
 
 # 设置工作目录
 WORKDIR /app
@@ -29,7 +37,10 @@ RUN ./mvnw package -DskipTests -B
 # 多阶段构建 - Stage 2: 运行阶段
 # 使用更轻量的 JRE 镜像，减小最终镜像体积
 # ============================================================
-FROM eclipse-temurin:25-jre-alpine
+# ARG 需在每个 stage 重新声明（多阶段构建的作用域规则），
+# 否则 stage-2 拿不到 stage-1 前定义的 REGISTRY
+ARG REGISTRY=docker.io/library
+FROM ${REGISTRY}/eclipse-temurin:25-jre-alpine
 
 WORKDIR /app
 
