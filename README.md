@@ -149,11 +149,11 @@ npm run build
 ```bash
 # Windows (PowerShell)
 .\scripts\sync-base-images.ps1                          # 从 .env 读 REGISTRY
-.\scripts\sync-base-images.ps1 192.168.8.6:5000         # 显式指定 Registry
+.\scripts\sync-base-images.ps1 <your-registry>          # 显式指定 Registry，如 my-reg:5000
 
 # Linux / macOS / Git Bash
 ./scripts/sync-base-images.sh                           # 从 .env 读 REGISTRY
-./scripts/sync-base-images.sh 192.168.8.6:5000          # 显式指定 Registry
+./scripts/sync-base-images.sh <your-registry>           # 显式指定 Registry
 ```
 
 > **PowerShell 执行策略**：若遇 `无法加载文件...因为在此系统上禁止运行脚本`，用 `powershell -ExecutionPolicy Bypass -File .\scripts\sync-base-images.ps1` 放行（仅当前会话生效，安全）。
@@ -226,7 +226,7 @@ Docker Compose 会启动两个容器：
 
 2. 填写服务器地址，例如：
    - 本地开发：`http://localhost:8080`
-   - NAS 部署：`http://192.168.8.6:13566`
+   - NAS 部署：`http://<nas-ip>:13566`
 
 3. 输入用户名和密码登录。
 
