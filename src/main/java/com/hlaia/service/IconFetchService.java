@@ -1,4 +1,4 @@
-package com.hlaia.kafka;
+package com.hlaia.service;
 
 import com.hlaia.entity.Bookmark;
 import com.hlaia.mapper.BookmarkMapper;
@@ -7,10 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.stereotype.Component;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.json.JsonMapper;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
 
 import java.net.InetAddress;
 import java.net.URI;
@@ -20,27 +18,32 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * 【Kafka 消费者 —— 异步获取网站图标（favicon）】
+ * 【网站图标抓取服务】—— 异步抓取并回填书签的 favicon
  *
- * 改进版：通过解析 HTML 中的 <link> 标签获取 favicon，大幅提高成功率。
- * 获取优先级：
+ * 取代原 Kafka 链路（BookmarkService → KafkaProducer → bookmark-icon-fetch Topic → IconFetchConsumer）。
+ * 现在：BookmarkService.createBookmark → 本服务 fetchAndSaveIcon（@Async 虚拟线程） → 抓取并 update。
+ *
+ * 为什么 favicon 必须异步？
+ *   抓取 favicon 需要请求外部网站，耗时数秒（受目标站点响应速度影响）。
+ *   若在创建书签接口内同步执行，会严重拖慢响应。异步化后接口立即返回，
+ *   图标在后台抓取成功后回填 bookmark.icon_url，前端下次刷新即可看到。
+ *
+ * 为什么用 @Async 而不是 Kafka？
+ *   单体内异步任务最轻量的方案；虚拟线程对 I/O 密集的 HTTP 抓取特别友好。
+ *   原 Kafka 方案的"解耦/可靠/重试"优势在单机场景被其部署成本盖过。
+ *
+ * favicon 获取优先级（保留原 IconFetchConsumer 全部逻辑）：
  *   1. HTML 中 <link rel="icon"> / <link rel="shortcut icon"> 声明的图标
  *   2. <link rel="apple-touch-icon"> 声明的图标（兜底）
  *   3. 默认路径 domain/favicon.ico
  *   4. 以上均失败 → iconUrl 保持 null，前端用 Google Favicon 服务兜底
- *
- * Jsoup 简介：
- *   Jsoup 是一个 Java HTML 解析库，可以像 jQuery 一样用 CSS 选择器查找元素。
- *   这里用 Jsoup.connect(url).get() 获取网页 HTML 并解析为 Document 对象，
- *   然后用 select("link[rel~=(?i)icon]") 查找所有 favicon 声明标签。
  */
 @Slf4j
-@Component
+@Service
 @RequiredArgsConstructor
-public class IconFetchConsumer {
+public class IconFetchService {
 
     private final BookmarkMapper bookmarkMapper;
-    private final JsonMapper jsonMapper;
 
     /**
      * 共享的 HttpClient 实例（避免每次请求都创建新实例）
@@ -52,17 +55,18 @@ public class IconFetchConsumer {
             .build();
 
     /**
-     * 消费"获取网站图标"消息
+     * 异步抓取 favicon 并回填到 bookmark.icon_url
      *
-     * @param message Kafka 消息内容，格式：{"bookmarkId": 123, "url": "https://www.baidu.com"}
+     * @Async 让此方法在虚拟线程上执行，调用方（BookmarkService）立即返回。
+     * 方法内部 try/catch 兜底所有异常——抓取失败只是 iconUrl 保持 null，
+     * 绝不能让异步任务的异常冒泡到 Spring 的异步执行器日志噪音里。
+     *
+     * @param bookmarkId 书签 ID（用于回填数据库记录）
+     * @param url        书签的 URL（消费者需要访问这个 URL 来获取图标）
      */
-    @KafkaListener(topics = "bookmark-icon-fetch", groupId = "hlaia-nav")
-    public void consume(String message) {
+    @Async
+    public void fetchAndSaveIcon(Long bookmarkId, String url) {
         try {
-            JsonNode node = jsonMapper.readTree(message);
-            Long bookmarkId = node.get("bookmarkId").asLong();
-            String url = node.get("url").asText();
-
             String iconUrl = fetchFavicon(url);
 
             if (iconUrl != null) {
@@ -74,7 +78,7 @@ public class IconFetchConsumer {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to process icon fetch: {}", e.getMessage());
+            log.warn("Failed to fetch icon for bookmark {}: {}", bookmarkId, e.getMessage());
         }
     }
 

@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * 为什么不每次启动都全量导入？
  *   1. 数据量大时全量导入很慢（影响启动时间）
  *   2. 正常重启不应丢失 ES 数据（ES 数据持久化在磁盘上）
- *   3. 增量同步（Kafka）已经在处理日常数据变更
+ *   3. 增量同步（事务后置事件 SearchSyncEvent）已经在处理日常数据变更
  */
 @Slf4j
 @Component

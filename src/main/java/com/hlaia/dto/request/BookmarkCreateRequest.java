@@ -60,7 +60,7 @@ public class BookmarkCreateRequest {
     /**
      * 网站图标 URL（可选）
      * 如 "https://www.baidu.com/favicon.ico"
-     * 前端创建/编辑书签时可传入，若未传则由后端通过 Kafka 异步获取
+     * 前端创建/编辑书签时可传入，若未传则由后端通过 IconFetchService 异步获取
      */
     private String iconUrl;
 }

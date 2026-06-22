@@ -2,15 +2,16 @@ package com.hlaia.scheduled;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.hlaia.entity.StagingItem;
-import com.hlaia.kafka.KafkaProducer;
 import com.hlaia.mapper.StagingItemMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 【定时任务 —— 扫描并清理过期暂存项】
@@ -54,36 +55,25 @@ import java.util.List;
  *   因为清理过期暂存项需要频繁检查，而不是在特定时间点执行。
  *
  * =====================================================================
- *  三、为什么扫描和清理要分开？（架构设计思路）
+ *  三、清理策略（直接批量删除）
  * =====================================================================
  *
- *   本类（StagingCleanupScheduler）只负责"扫描"，不负责"删除"。
- *   实际的删除操作由 StagingCleanupConsumer（Kafka 消费者）完成。
+ *   本类扫描到过期数据后，直接调用 deleteBatchIds 批量删除。
  *
- *   完整流程：
- *   StagingCleanupScheduler（定时扫描过期数据）
- *     -- 通过 Kafka 发送消息 -->
- *   StagingCleanupConsumer（执行实际删除操作）
+ *   历史背景：此前的版本会把过期 ID 发到 Kafka 的 staging-cleanup Topic，
+ *   再由 StagingCleanupConsumer 异步逐条删除。这种"扫描+发消息+消费者再删"的链路
+ *   在单机部署场景下纯属冗余——过期记录已经被 selectList 拉进内存，
+ *   再绕一圈消息队列只会增加网络跳、JSON 序列化和 MQ 持久化开销，
+ *   还多了一个 Kafka 单点故障风险。
  *
- *   为什么不直接在 Scheduler 中调用 stagingItemMapper.deleteById()？
+ *   直接批量删除的优势：
+ *   1. 简单：一条 SQL `DELETE ... WHERE id IN (...)`，无中间件依赖
+ *   2. 高效：批量单次往返，比逐条 deleteById 快得多
+ *   3. 可靠：本任务在 @Scheduled 线程跑，天然就在后台，不会阻塞请求；
+ *      若本次清理失败，下次扫描时这些记录仍然会被选中并清理（最终一致）
  *
- *   1. 解耦（单一职责原则）：
- *      - Scheduler 的职责是"发现需要清理的数据"
- *      - Consumer 的职责是"执行清理操作"
- *      - 各司其职，代码更清晰
- *
- *   2. 可靠性：
- *      - 如果直接删除，删除失败后没有重试机制
- *      - 通过 Kafka 传递，如果 Consumer 处理失败，Kafka 会重新投递消息
- *      - 保证过期数据最终一定会被清理
- *
- *   3. 可扩展性：
- *      - 如果未来删除逻辑变复杂（如需要先备份、需要通知用户等），
- *        只需要修改 Consumer，Scheduler 不需要改动
- *
- *   4. 负载均衡：
- *      - 如果部署了多个服务实例，Kafka 会自动分配消息给不同实例
- *      - 避免所有删除操作都集中在定时任务所在的服务器上
+ *   @Transactional 的作用：
+ *   保证整个删除操作要么全部成功要么全部回滚——避免删到一半失败导致部分过期记录残留。
  *
  * =====================================================================
  *  四、@EnableScheduling 注解的作用
@@ -125,29 +115,23 @@ import java.util.List;
 public class StagingCleanupScheduler {
 
     /**
-     * 暂存项 Mapper —— 用于查询过期的暂存项
+     * 暂存项 Mapper —— 查询过期记录 + 批量删除
      */
     private final StagingItemMapper stagingItemMapper;
 
     /**
-     * Kafka 生产者 —— 用于发送清理消息
-     * 不直接删除数据，而是通过 Kafka 发送消息，由消费者异步执行删除
-     */
-    private final KafkaProducer kafkaProducer;
-
-    /**
-     * 扫描过期的暂存项，并通过 Kafka 发送清理消息
+     * 扫描过期的暂存项并直接批量删除
      *
      * 执行频率：每 60 秒执行一次（fixedRate = 60000，单位是毫秒）
      *
      * 处理流程：
      * 1. 查询 staging_item 表中 expireAt <= 当前时间的所有记录
-     * 2. 遍历每条过期记录，通过 Kafka 发送清理消息
-     * 3. StagingCleanupConsumer 消费消息后执行实际的删除操作
+     * 2. 用 deleteBatchIds 一次性批量删除（单条 SQL DELETE ... WHERE id IN (...)）
      *
-     * 注意：本方法只负责"发现"过期数据，不负责"删除"
+     * @Transactional：保证批量删除的原子性——要么全部删除，要么全部回滚。
      */
     @Scheduled(fixedRate = 60000)  // 每 60000 毫秒（60秒）执行一次
+    @Transactional
     public void scanExpiredItems() {
         // ---- 第1步：查询所有过期的暂存项 ----
         // 使用 LambdaQueryWrapper 构建 WHERE 条件
@@ -158,17 +142,18 @@ public class StagingCleanupScheduler {
                 new LambdaQueryWrapper<StagingItem>()
                         .le(StagingItem::getExpireAt, LocalDateTime.now()));
 
-        // ---- 第2步：遍历每条过期记录，通过 Kafka 发送清理消息 ----
-        for (StagingItem item : expired) {
-            // 调用 KafkaProducer 发送消息到 "staging-cleanup" Topic
-            // StagingCleanupConsumer 会消费消息并执行删除操作
-            kafkaProducer.sendStagingCleanup(item.getId(), item.getUserId());
+        if (expired.isEmpty()) {
+            return;  // 没有过期数据，避免每分钟输出一条无用日志
         }
 
-        // ---- 第3步：记录日志 ----
-        // 只在有过期数据时才输出日志，避免每分钟都输出一条无用的日志
-        if (!expired.isEmpty()) {
-            log.info("Scheduled cleanup: {} expired staging items", expired.size());
-        }
+        // ---- 第2步：批量删除 ----
+        // 把过期记录的 ID 收集成 List，一次性交给 deleteBatchIds
+        // 底层 SQL：DELETE FROM staging_item WHERE id IN (?, ?, ...)
+        List<Long> expiredIds = expired.stream()
+                .map(StagingItem::getId)
+                .collect(Collectors.toList());
+        stagingItemMapper.deleteBatchIds(expiredIds);
+
+        log.info("Scheduled cleanup: {} expired staging items", expired.size());
     }
 }

@@ -111,13 +111,6 @@
             <artifactId>flyway-mysql</artifactId>
         </dependency>
 
-        <!-- Messaging -->
-        <!-- Spring Boot 4 把 Kafka 自动配置拆到独立模块，需使用 starter 而非裸 spring-kafka -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-kafka</artifactId>
-        </dependency>
-
         <!-- API Documentation -->
         <dependency>
             <groupId>org.springdoc</groupId>
@@ -148,11 +141,6 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

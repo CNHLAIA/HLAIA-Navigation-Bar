@@ -6,9 +6,10 @@ import com.hlaia.common.ErrorCode;
 import com.hlaia.dto.request.*;
 import com.hlaia.dto.response.BookmarkResponse;
 import com.hlaia.entity.Bookmark;
+import com.hlaia.event.SearchSyncEvent;
 import com.hlaia.mapper.BookmarkMapper;
-import com.hlaia.kafka.KafkaProducer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,14 +22,14 @@ import java.util.stream.Collectors;
  * Service 层是整个后端架构的"大脑"，负责：
  *   1. 业务逻辑处理（如权限校验、排序计算、数据转换）
  *   2. 调用 Mapper 层进行数据库操作
- *   3. 调用 KafkaProducer 发送异步任务消息
+ *   3. 触发异步任务（favicon 抓取）和数据同步事件（ES 同步）
  *   4. 数据转换（Entity -> Response DTO）
  *   5. 事务管理（保证多个数据库操作的原子性）
  *
  * 本类与 FolderService 的对比：
  *   FolderService 需要处理树形结构（递归构建文件夹树、防止循环移动），
  *   而 BookmarkService 的逻辑相对简单——书签是扁平结构，只需要在文件夹内排序。
- *   但 BookmarkService 引入了异步任务（通过 Kafka）和批量操作的概念。
+ *   但 BookmarkService 引入了异步任务（favicon 抓取）和批量操作的概念。
  *
  * @Service 注解的作用：
  *   告诉 Spring "这是一个业务逻辑类，请创建它的实例并纳入容器管理"。
@@ -37,11 +38,6 @@ import java.util.stream.Collectors;
  * @RequiredArgsConstructor 注解的作用：
  *   Lombok 自动为所有 final 字段生成构造方法。
  *   Spring 看到"只有一个构造方法"时，会自动进行依赖注入。
- *   等价于手写：
- *     public BookmarkService(BookmarkMapper bookmarkMapper, KafkaProducer kafkaProducer) {
- *         this.bookmarkMapper = bookmarkMapper;
- *         this.kafkaProducer = kafkaProducer;
- *     }
  */
 @Service
 @RequiredArgsConstructor
@@ -50,7 +46,10 @@ public class BookmarkService {
     // 依赖注入：通过 final + @RequiredArgsConstructor 实现
     // final 表示这些字段必须在构造方法中赋值，赋值后不可修改
     private final BookmarkMapper bookmarkMapper;
-    private final KafkaProducer kafkaProducer;
+    // favicon 异步抓取：创建书签后异步获取网站图标
+    private final IconFetchService iconFetchService;
+    // ES 同步事件发布：书签增删改后发事件，事务提交后由 SearchSyncEventListener 写 ES
+    private final ApplicationEventPublisher eventPublisher;
     private final com.hlaia.mapper.FolderMapper folderMapper;
 
     /**
@@ -96,20 +95,23 @@ public class BookmarkService {
      *   1. 将请求 DTO 转为 Entity 对象
      *   2. 计算排序序号（新书签排在文件夹内最后面）
      *   3. 插入数据库
-     *   4. 发送 Kafka 异步任务：让消费者去获取该网站的图标（favicon）
-     *   5. 返回创建的书签信息
+     *   4. 触发异步任务：让后台获取该网站的图标（favicon）
+     *   5. 发布 ES 同步事件（事务提交后写 ES）
+     *   6. 返回创建的书签信息
      *
      * @Transactional 注解的作用：
      *   保证方法内的所有数据库操作要么全部成功，要么全部失败（回滚）。
      *   这个方法涉及 selectCount + insert 两次数据库操作，需要事务保护。
-     *   （注意：Kafka 发送是异步的，不在事务范围内，发送失败不影响书签创建）
+     *   （注意：favicon 抓取和 ES 同步事件都不在事务范围内——
+     *    favicon 是 @Async 立即返回；ES 同步事件由 @TransactionalEventListener
+     *    在事务提交后才执行，事务回滚则事件被丢弃，保证一致性。）
      *
      * 异步获取图标的用途：
      *   用户创建书签时，后端需要访问书签的 URL 来获取网站的 favicon（小图标）。
      *   这个过程可能需要几秒钟（网络请求），如果同步获取会拖慢接口响应。
-     *   所以我们通过 Kafka 异步处理：
+     *   所以用 @Async 异步处理（虚拟线程）：
      *   - 创建书签时立即返回，iconUrl 字段暂时为 null
-     *   - Kafka 消费者在后台获取图标，成功后更新 iconUrl 字段
+     *   - IconFetchService 在后台获取图标，成功后更新 iconUrl 字段
      *   - 前端下次刷新或通过轮询就能看到图标了
      *
      * @param userId  当前登录用户的 ID
@@ -151,14 +153,15 @@ public class BookmarkService {
         // 插入成功后，bookmark.getId() 会自动获得数据库生成的自增主键
         bookmarkMapper.insert(bookmark);
 
-        // ============ 第四步：发送 Kafka 异步任务 ============
-        // 让消费者异步获取该网站的图标（favicon）
-        // 这是一个非阻塞操作，不会影响接口响应速度
-        kafkaProducer.sendIconFetchTask(bookmark.getId(), bookmark.getUrl());
+        // ============ 第四步：触发 favicon 异步抓取 ============
+        // IconFetchService.fetchAndSaveIcon 是 @Async 方法，在虚拟线程后台执行
+        // 非阻塞调用，立即返回，不影响接口响应速度
+        iconFetchService.fetchAndSaveIcon(bookmark.getId(), bookmark.getUrl());
 
-        // ============ 第五步：发送 ES 同步消息 ============
-        // 创建书签后，需要把新书签同步到 Elasticsearch，这样用户才能搜到它
-        kafkaProducer.sendSearchSync("CREATE", "bookmark",  bookmark.getId());
+        // ============ 第五步：发布 ES 同步事件 ============
+        // 事件不会立即处理——@TransactionalEventListener 在事务提交后才写 ES
+        // 这样若事务回滚，ES 也不会写入脏数据
+        eventPublisher.publishEvent(new SearchSyncEvent("bookmark", "CREATE", bookmark.getId()));
         return toResponse(bookmark);
     }
 
@@ -184,8 +187,8 @@ public class BookmarkService {
         if (request.getDescription() != null) bookmark.setDescription(request.getDescription());
         if (request.getIconUrl() != null) bookmark.setIconUrl(request.getIconUrl());
         bookmarkMapper.updateById(bookmark);
-        // 更新书签后，同步到 ES
-        kafkaProducer.sendSearchSync("UPDATE", "bookmark", bookmarkId);
+        // 更新书签后，发事件同步到 ES（事务提交后执行）
+        eventPublisher.publishEvent(new SearchSyncEvent("bookmark", "UPDATE", bookmarkId));
         return toResponse(bookmark);
     }
 
@@ -208,8 +211,8 @@ public class BookmarkService {
         // 校验权限：确保书签存在且属于当前用户
         getBookmarkForUser(userId, bookmarkId);
         bookmarkMapper.deleteById(bookmarkId);
-        // 删除书签后，从 ES 中也删除对应的文档
-        kafkaProducer.sendSearchSync("DELETE", "bookmark", bookmarkId);
+        // 删除书签后，发事件从 ES 中删除对应文档（事务提交后执行）
+        eventPublisher.publishEvent(new SearchSyncEvent("bookmark", "DELETE", bookmarkId));
     }
 
     /**
@@ -270,9 +273,9 @@ public class BookmarkService {
         // deleteBatchIds 是 MyBatis-Plus 提供的批量删除方法
         // 底层会生成 SQL: DELETE FROM bookmark WHERE id IN (?, ?, ?)
         bookmarkMapper.deleteBatchIds(request.getIds());
-        // 批量删除后，逐个发送 ES 同步消息
+        // 批量删除后，逐个发 ES 同步事件（事务提交后执行）
         for (Long id : request.getIds()) {
-            kafkaProducer.sendSearchSync("DELETE", "bookmark", id);
+            eventPublisher.publishEvent(new SearchSyncEvent("bookmark", "DELETE", id));
         }
     }
 
@@ -350,8 +353,8 @@ public class BookmarkService {
             bookmark.setFolderId(request.getTargetFolderId());
             bookmark.setSortOrder(nextSortOrder++);
             bookmarkMapper.updateById(bookmark);
-            // 移动书签后同步 ES（folderId 变了）
-            kafkaProducer.sendSearchSync("UPDATE", "bookmark", bookmark.getId());
+            // 移动书签后发事件同步 ES（folderId 变了，事务提交后执行）
+            eventPublisher.publishEvent(new SearchSyncEvent("bookmark", "UPDATE", bookmark.getId()));
         }
     }
 

@@ -1,6 +1,6 @@
 package com.hlaia.aspect;
 
-import com.hlaia.kafka.KafkaProducer;
+import com.hlaia.service.OperationLogService;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -41,7 +41,7 @@ import org.springframework.stereotype.Component;
  *
  * @Aspect     标记这是一个 AOP 切面
  * @Component  注册为 Spring Bean，让 Spring 管理这个切面的生命周期
- * @RequiredArgsConstructor Lombok 注解，为 final 字段生成构造函数（注入 KafkaProducer）
+ * @RequiredArgsConstructor Lombok 注解，为 final 字段生成构造函数（注入 OperationLogService）
  */
 @Aspect
 @Component
@@ -49,14 +49,14 @@ import org.springframework.stereotype.Component;
 public class OperationLogAspect {
 
     /**
-     * Kafka 消息生产者 —— 用于异步发送操作日志到 Kafka
+     * 操作日志服务 —— 异步写入数据库
      *
-     * 为什么用 Kafka 而不是直接写数据库？
+     * 为什么用 @Async 而不是同步直接 insert？
      *   1. 不影响性能：日志记录是"非关键操作"，不应该拖慢用户请求的响应速度
-     *   2. 可靠性：即使日志数据库暂时不可用，消息暂存在 Kafka 中，不会丢失
-     *   3. 解耦：Controller 不需要知道日志怎么存储，切面负责发送，Consumer 负责存储
+     *   2. 可靠性：OperationLogService.record 内部 try/catch 兜底，日志失败不冒泡
+     *   3. 解耦：Controller 不需要知道日志怎么存储，切面负责调用，Service 负责落库
      */
-    private final KafkaProducer kafkaProducer;
+    private final OperationLogService operationLogService;
 
     /**
      * 环绕通知 —— 拦截所有 Controller 方法（排除 AuthController），记录操作日志
@@ -194,13 +194,11 @@ public class OperationLogAspect {
             String target = className + "." + action;
 
             // ============================================================
-            // 通过 Kafka 异步发送操作日志
+            // 通过 OperationLogService 异步记录操作日志
             // ============================================================
-            // sendOperationLog 会将日志消息发送到 Kafka 的 "operation-log" Topic，
-            // 由 OperationLogConsumer 异步消费并写入数据库。
-            //
-            // 异步的好处：发送日志消息只需要几毫秒，不会阻塞当前请求的返回。
-            kafkaProducer.sendOperationLog(userId, action, target);
+            // record() 是 @Async 方法（虚拟线程执行），立即返回，
+            // 数据库写入在后台完成，不阻塞当前请求。
+            operationLogService.record(userId, action, target);
 
         } catch (Exception e) {
             // ============================================================
@@ -209,7 +207,7 @@ public class OperationLogAspect {
             // 核心原则：**日志记录失败不应该影响正常的业务请求**
             //
             // 可能导致日志记录失败的场景：
-            //   1. Kafka 服务不可用（网络故障、Kafka 宕机）
+            //   1. 数据库不可用（连接异常、磁盘满）
             //   2. SecurityContextHolder 中没有认证信息（某些边缘场景）
             //   3. 方法签名解析异常
             //
