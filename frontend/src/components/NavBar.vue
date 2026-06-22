@@ -9,9 +9,9 @@
       </button>
       <div class="navbar-brand">
         <div class="brand-icon">
+          <!-- 书签造型：顶部平直 + 底部 V 形缺口，与 favicon 保持一致 -->
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <rect x="1" y="1" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M5 7h8M5 9h6M5 11h7" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            <path d="M4.5 2.5h9a1 1 0 0 1 1 1v12l-5.5-3.2L3.5 15.5v-12a1 1 0 0 1 1-1z" fill="currentColor"/>
           </svg>
         </div>
         <span class="brand-text">HLAIA</span>
@@ -24,22 +24,24 @@
     <!-- 导航链接 -->
     <nav class="navbar-links">
       <router-link to="/" class="nav-link" :class="{ active: route.path === '/' }">
+        <!-- 旗帜：书签的核心隐喻 -->
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M2 6l6-4.5L14 6v7.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 13.5V6z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 14V2.5M4 2.5h7l-1.5 2.5L11 7.5H4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         {{ t('nav.bookmarks') }}
       </router-link>
       <router-link to="/staging" class="nav-link" :class="{ active: route.path === '/staging' }">
+        <!-- 收件箱：暂存 = 待整理的收集区 -->
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.2"/>
-          <path d="M5 6h6M5 8h4M5 10h5" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+          <path d="M2 9.5l1.8-5.5a1 1 0 0 1 .95-.7h6.5a1 1 0 0 1 .95.7L14 9.5M2 9.5v3a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3M2 9.5h3l1 1.5h4l1-1.5h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         {{ t('nav.staging') }}
       </router-link>
       <router-link to="/settings" class="nav-link" :class="{ active: route.path === '/settings' }">
+        <!-- 齿轮：设置（8 齿，中心圆+轴心） -->
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.2"/>
-          <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          <circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M8 1.5v1.8M8 12.7v1.8M14.5 8h-1.8M3.3 8H1.5M12.6 3.4l-1.3 1.3M4.7 11.3l-1.3 1.3M12.6 12.6l-1.3-1.3M4.7 4.7L3.4 3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
         {{ t('nav.settings') }}
       </router-link>
@@ -49,8 +51,10 @@
         class="nav-link"
         :class="{ active: route.path.startsWith('/admin') }"
       >
+        <!-- 盾牌：管理员 = 系统守护者 -->
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 14s1-4 6-4 6 4 6 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8 1.5l5 1.8v4.2c0 3.2-2.1 5.6-5 6.5-2.9-.9-5-3.3-5-6.5V3.3l5-1.8z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          <path d="M5.8 8l1.5 1.5L10.4 6.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         {{ t('nav.admin') }}
       </router-link>

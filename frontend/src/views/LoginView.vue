@@ -21,9 +21,9 @@
       <!-- Logo 区域 -->
       <div class="card-header">
         <div class="logo-icon">
+          <!-- 书签造型，与 favicon 和 NavBar 品牌图标语义一致 -->
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-            <rect x="2" y="2" width="28" height="28" rx="6" stroke="currentColor" stroke-width="2" />
-            <path d="M10 12h12M10 16h8M10 20h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <path d="M8 4h16a2 2 0 0 1 2 2v22l-10-5.8L6 28V6a2 2 0 0 1 2-2z" fill="currentColor"/>
           </svg>
         </div>
         <h1 class="app-title">HLAIA</h1>
