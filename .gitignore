@@ -36,6 +36,11 @@ build/
 .claude/
 .codex/
 .agents/
+.zcode/
+
+# Local agent notes (per-machine, not for version control)
+AGENTS.local.md
+*.local.md
 
 # Trellis workspace (personal developer data)
 .trellis/workspace/

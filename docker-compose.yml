@@ -1,6 +1,12 @@
 services:
   hlaia-nav:
-    build: .
+    build:
+      context: .
+      # 把 REGISTRY 传给 Dockerfile，让 FROM 从局域网 Registry 拉基础镜像。
+      # REGISTRY 在 .env 中定义（与 push/pull 用的 REGISTRY 是同一个）。
+      # 不传时 Dockerfile 默认 docker.io/library，走 Docker Hub（需外网）。
+      args:
+        REGISTRY: ${REGISTRY}
     image: "${REGISTRY}/hlaia-navigation-bar:latest"
     container_name: hlaia-nav
     restart: unless-stopped
@@ -11,7 +17,10 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
 
   hlaia-nav-frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        REGISTRY: ${REGISTRY}
     image: "${REGISTRY}/hlaia-nav-frontend:latest"
     container_name: hlaia-nav-frontend
     restart: unless-stopped

@@ -1,8 +1,16 @@
 # ============================================================
+# 基础镜像来源（参数化）
+# ============================================================
+# 默认 REGISTRY=docker.io/library：直接从 Docker Hub 拉取（需外网）
+# 内网构建时通过 --build-arg REGISTRY=<你的局域网Registry> 覆盖，
+# 从私有 Registry 拉取已同步的基础镜像（详见 scripts/sync-base-images.sh）
+ARG REGISTRY=docker.io/library
+
+# ============================================================
 # 多阶段构建 - Stage 1: 构建阶段
 # 使用 Node.js 镜像编译 Vue 3 前端项目
 # ============================================================
-FROM node:20-alpine AS build
+FROM ${REGISTRY}/node:20-alpine AS build
 
 WORKDIR /app
 
@@ -23,7 +31,9 @@ RUN npm run build
 # 多阶段构建 - Stage 2: 运行阶段
 # 使用 Nginx 作为静态文件服务器和反向代理
 # ============================================================
-FROM nginx:alpine
+# ARG 需在每个 stage 重新声明（多阶段构建的作用域规则）
+ARG REGISTRY=docker.io/library
+FROM ${REGISTRY}/nginx:alpine
 
 # 从构建阶段复制打包好的静态文件到 Nginx 默认的 HTML 目录
 COPY --from=build /app/dist /usr/share/nginx/html
