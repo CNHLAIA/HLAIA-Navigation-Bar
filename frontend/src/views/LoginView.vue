@@ -147,7 +147,19 @@ async function handleLogin() {
     // 1. 如果 URL 中有 redirect 参数（说明是被拦截后跳到登录的），回到原来想去的页面
     // 2. 否则跳转到首页
     const redirect = route.query.redirect || '/'
-    await router.replace(redirect)
+
+    // 兜底（方案 B）：浏览器"会话恢复"恢复标签页时，vue-router 的初始导航可能处于异常
+    // 状态，导致程序内 router.replace 不更新地址栏/视图（表现为点登录无反应）。
+    // 这里先尝试 router.replace，若仍停留在登录页，则降级为整页跳转绕过该问题。
+    try {
+      await router.replace(redirect)
+    } catch {
+      // replace 抛错（如导航被中止）时落入下面的兜底
+    }
+    if (window.location.pathname.startsWith('/login')) {
+      window.location.assign(redirect)
+      return
+    }
 
     // 跳转完成后再显示成功提示，避免吐司动画和路由跳转争抢主线程
     ElMessage.success(t('auth.login.toast.success'))
