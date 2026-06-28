@@ -4,16 +4,22 @@ import com.hlaia.common.Result;
 import com.hlaia.dto.request.*;
 import com.hlaia.dto.response.BookmarkImportResponse;
 import com.hlaia.dto.response.BookmarkResponse;
+import com.hlaia.service.BookmarkExportService;
 import com.hlaia.service.BookmarkImportService;
 import com.hlaia.service.BookmarkService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -81,6 +87,8 @@ public class BookmarkController {
     private final BookmarkService bookmarkService;
     // 书签导入服务：解析浏览器导出的书签 HTML 文件并批量导入
     private final BookmarkImportService bookmarkImportService;
+    // 书签导出服务：把用户全部书签序列化为 Netscape HTML 文件下载
+    private final BookmarkExportService bookmarkExportService;
 
     /**
      * 获取指定文件夹下的书签列表
@@ -309,5 +317,42 @@ public class BookmarkController {
             @RequestParam(value = "targetFolderId", required = false) Long targetFolderId,
             @RequestParam(value = "duplicateMode", defaultValue = "OVERWRITE") String duplicateMode) {
         return Result.success(bookmarkImportService.importBookmarks(userId, file, targetFolderId, duplicateMode));
+    }
+
+    /**
+     * 导出当前用户的全部书签为 Netscape Bookmark HTML 文件
+     *
+     * GET /api/bookmarks/export
+     *
+     * 为什么用 GET 而非 POST？
+     *   导出是只读、幂等、无副作用的"取数据"操作，符合 GET 语义，
+     *   也便于浏览器原生（<a>/<form>）直接触发下载。导入用 POST 是因为它要上传文件（有副作用）。
+     *
+     * 为什么返回 ResponseEntity<byte[]> 而非 Result<T>？
+     *   Result<T> 是给 JSON 接口用的统一包装（{code, message, data}）。
+     *   文件下载需要直接返回二进制字节流 + Content-Disposition 头让浏览器识别为附件下载，
+     *   所以这里脱离 Result 包装，参考 FaviconController 的 ResponseEntity<byte[]> 模式。
+     *
+     * 文件名设计：bookmarks_yyyyMMdd_HHmmss.html
+     *   时间戳避免重名，让多次导出的备份文件可并存（契合"灾备备份"场景保留多个版本）。
+     *   纯 ASCII 文件名，无编码问题，无需 RFC 5987 的 filename*= 编码。
+     *
+     * Content-Disposition: attachment 表示"附件下载"（浏览器弹出保存对话框而非直接打开）。
+     *
+     * @param userId 当前登录用户的 ID（由 Spring Security 自动注入，JWT 保护）
+     * @return ResponseEntity 携带 HTML 字节流，浏览器会触发文件下载
+     */
+    @GetMapping("/bookmarks/export")
+    @Operation(summary = "Export all bookmarks as Netscape HTML")
+    public ResponseEntity<byte[]> exportBookmarks(@AuthenticationPrincipal Long userId) {
+        byte[] html = bookmarkExportService.exportBookmarks(userId);
+        // 文件名用当前时间戳，格式如 bookmarks_20260628_153012.html
+        String filename = "bookmarks_" + LocalDateTime.now()
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".html";
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/html; charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + filename + "\"")
+                .body(html);
     }
 }

@@ -50,6 +50,7 @@ public enum ErrorCode {
     RATE_LIMITED(2007, "Too many requests"),            // 请求过于频繁（限流）
     BOOKMARK_DUPLICATE(2009, "Bookmark already exists"), // 书签已存在（同一用户相同 URL）
     IMPORT_FAILED(2008, "Bookmark import failed"),      // 书签导入失败
+    EXPORT_FAILED(2010, "Bookmark export failed"),      // 书签导出失败
 
     // ========== 自定义错误码 (9999 - 99999) (练习用) ==========
     SO_HANDSOME(10086, "You are so handsome");
