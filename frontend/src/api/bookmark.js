@@ -93,3 +93,22 @@ export function importBookmarks(formData) {
     timeout: 60000
   })
 }
+
+/**
+ * 导出当前用户全部书签为 Netscape Bookmark HTML 文件
+ *
+ * 为什么用 responseType: 'blob'？
+ *   后端返回的是 HTML 文件二进制流（带 Content-Disposition: attachment），
+ *   不是统一的 { code, message, data } JSON。Axios 用 blob 接收，
+ *   且 request.js 响应拦截器对 blob 请求直接透传完整 response（不做业务码解包），
+ *   所以本函数返回的是完整 response 对象，调用方通过 response.data 拿到 Blob，
+ *   通过 response.headers['content-disposition'] 拿到文件名。
+ *
+ * @returns {Promise} - 完整 response 对象，response.data 为 Blob
+ */
+export function exportBookmarks() {
+  return request.get('/bookmarks/export', {
+    responseType: 'blob',
+    timeout: 60000
+  })
+}

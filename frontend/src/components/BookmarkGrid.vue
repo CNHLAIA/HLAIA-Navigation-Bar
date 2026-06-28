@@ -86,6 +86,16 @@
             {{ t('bookmarks.importDialog.title') }}
           </button>
           <button
+            class="export-bookmark-btn"
+            :title="t('bookmarks.exportDialog.title')"
+            @click="openExportDialog"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 4v-1a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v1M7 2v8M4.5 6.5L7 9l2.5-2.5M2 12h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            {{ t('bookmarks.exportDialog.title') }}
+          </button>
+          <button
             class="add-bookmark-btn"
             @click="openCreateDialog"
           >
@@ -310,6 +320,31 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 导出书签对话框 -->
+    <el-dialog
+      v-model="exportDialogVisible"
+      :title="t('bookmarks.exportDialog.title')"
+      width="420px"
+      :append-to-body="true"
+      class="bookmark-dialog export-dialog"
+    >
+      <div class="export-form">
+        <p class="export-summary">
+          {{ t('bookmarks.exportDialog.summary', { folders: exportStats.folders, bookmarks: exportStats.bookmarks }) }}
+        </p>
+      </div>
+      <template #footer>
+        <el-button @click="exportDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="exportLoading"
+          @click="handleExportConfirm"
+        >
+          {{ exportLoading ? t('bookmarks.exportDialog.exporting') : t('bookmarks.exportDialog.exportBtn') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -332,7 +367,7 @@ import BookmarkCard from './BookmarkCard.vue'
 import BatchToolbar from './BatchToolbar.vue'
 import FolderPickerDialog from './FolderPickerDialog.vue'
 import { useFolderStore } from '@/stores/folder'
-import { importBookmarks } from '@/api/bookmark'
+import { importBookmarks, exportBookmarks } from '@/api/bookmark'
 
 const { t } = useI18n()
 
@@ -413,12 +448,40 @@ const importSelectedFile = ref(null)
 const importTargetFolderId = ref(null)
 const importDuplicateMode = ref('OVERWRITE')
 
+// ---- 导出书签弹窗状态 ----
+const exportDialogVisible = ref(false)
+const exportLoading = ref(false)
+
 /**
  * 导入对话框中可选择的文件夹列表（扁平化后的树形结构）
  * 使用 computed 缓存，避免每次渲染重新计算
  */
 const importFolderList = computed(() => {
   return flattenImportTree(folderStore.folderTree || [])
+})
+
+/**
+ * 导出对话框的统计信息：当前用户的文件夹总数 + 书签总数
+ * 从内存 folderStore.folderTree 递归统计，无需新增后端预统计接口。
+ * - 文件夹数：树中所有节点（含嵌套子文件夹）的总和
+ * - 书签数：所有节点的 bookmarkCount 之和
+ * 用 computed 缓存，弹窗打开时自动反映最新树状态。
+ */
+const exportStats = computed(() => {
+  const tree = folderStore.folderTree || []
+  let folders = 0
+  let bookmarks = 0
+  const walk = (nodes) => {
+    for (const node of nodes) {
+      folders++
+      bookmarks += node.bookmarkCount || 0
+      if (node.children && node.children.length > 0) {
+        walk(node.children)
+      }
+    }
+  }
+  walk(tree)
+  return { folders, bookmarks }
 })
 
 /**
@@ -851,6 +914,62 @@ async function handleImportConfirm() {
 }
 
 /**
+ * 打开导出书签对话框
+ * 统计数据（文件夹/书签数）由 exportStats computed 实时计算，无需预加载
+ */
+function openExportDialog() {
+  exportDialogVisible.value = true
+}
+
+/**
+ * 确认导出书签
+ *
+ * 文件下载流程：
+ *   1. 调用 exportBookmarks()，拦截器对 blob 请求透传完整 response
+ *   2. 从 response.data 取 Blob，构造可下载的 Object URL
+ *   3. 创建临时 <a> 标签触发下载，文件名优先取后端 Content-Disposition 中的 filename
+ *   4. 下载后释放 Object URL，避免内存泄漏
+ */
+async function handleExportConfirm() {
+  exportLoading.value = true
+  try {
+    const response = await exportBookmarks()
+    const blob = new Blob([response.data], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+
+    // 文件名：优先从后端 Content-Disposition 解析；失败则前端兜底生成
+    let filename = ''
+    const disposition = response.headers['content-disposition']
+    if (disposition) {
+      const match = disposition.match(/filename="?([^"]+)"?/i)
+      if (match && match[1]) filename = match[1]
+    }
+    if (!filename) {
+      const now = new Date()
+      const pad = (n) => String(n).padStart(2, '0')
+      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+      filename = `bookmarks_${ts}.html`
+    }
+
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+
+    exportDialogVisible.value = false
+    ElMessage.success(t('bookmarks.exportDialog.success'))
+  } catch {
+    // 拦截器已处理 HTTP 层错误提示；这里补一条业务层失败提示
+    ElMessage.error(t('bookmarks.exportDialog.failed'))
+  } finally {
+    exportLoading.value = false
+  }
+}
+
+/**
  * 拖拽结束：提交排序到后端
  */
 async function handleDragEnd() {
@@ -1087,6 +1206,30 @@ async function handleDragEnd() {
   color: var(--hlaia-primary);
 }
 
+/* ---- 导出书签按钮 ---- */
+/* 复用导入按钮的视觉风格（描边 + 表面色），保持工具栏按钮一致性 */
+.export-bookmark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--hlaia-radius);
+  border: 1px solid var(--hlaia-border);
+  background: var(--hlaia-surface);
+  color: var(--hlaia-text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-bookmark-btn:hover {
+  background: var(--hlaia-surface-light);
+  border-color: var(--hlaia-primary-light);
+  color: var(--hlaia-primary);
+}
+
 /* ---- 新增书签按钮 ---- */
 .add-bookmark-btn {
   display: inline-flex;
@@ -1303,6 +1446,19 @@ async function handleDragEnd() {
 .import-radio-group {
   display: flex;
   gap: 16px;
+}
+
+/* ---- 导出对话框 ---- */
+.export-form {
+  padding: 4px 0;
+}
+
+.export-summary {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--hlaia-text-muted);
+  margin: 0;
+  line-height: 1.6;
 }
 </style>
 

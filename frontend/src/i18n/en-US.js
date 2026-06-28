@@ -152,6 +152,14 @@ export default {
       overwritten: 'overwritten',
       skipped: 'skipped',
       failed: 'Import failed. Please check the file format.'
+    },
+    exportDialog: {
+      title: 'Export Bookmarks',
+      summary: 'This will export all {folders} folder(s) and {bookmarks} bookmark(s) (with icons)',
+      exportBtn: 'Export',
+      exporting: 'Exporting...',
+      success: 'Export succeeded',
+      failed: 'Export failed. Please try again.'
     }
   },
   batchToolbar: {

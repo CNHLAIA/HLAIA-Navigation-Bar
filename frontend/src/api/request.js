@@ -53,6 +53,13 @@ request.interceptors.request.use(
  */
 request.interceptors.response.use(
   (response) => {
+    // blob 响应（文件下载，如书签导出）绕过业务码解包
+    // 这类响应没有 { code, message, data } 结构，response.data 是 Blob，
+    // 直接返回完整 response 对象，让调用方自行处理下载
+    if (response.config.responseType === 'blob') {
+      return response
+    }
+
     const res = response.data
 
     if (res.code !== 200) {

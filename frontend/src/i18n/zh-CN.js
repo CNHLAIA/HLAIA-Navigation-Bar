@@ -152,6 +152,14 @@ export default {
       overwritten: '覆盖',
       skipped: '跳过',
       failed: '导入失败，请检查文件格式是否正确'
+    },
+    exportDialog: {
+      title: '导出书签',
+      summary: '将导出全部 {folders} 个文件夹、{bookmarks} 个书签（含图标）',
+      exportBtn: '确认导出',
+      exporting: '正在导出...',
+      success: '导出成功',
+      failed: '导出失败，请重试'
     }
   },
   batchToolbar: {
