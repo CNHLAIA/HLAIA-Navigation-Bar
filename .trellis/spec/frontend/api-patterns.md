@@ -191,6 +191,37 @@ export function importBookmarks(formData) {
 }
 ```
 
+### 文件下载 / 二进制响应
+
+后端返回文件（如书签导出 HTML、CSV 导出、附件）时，响应体是二进制流而非 `{ code, message, data }` JSON。**必须配 `responseType: 'blob'`**，否则响应拦截器会把 Blob 当业务对象解析，`res.code` 为 `undefined`，被误判为业务错误并弹 `ElMessage.error`。
+
+响应拦截器已对 `responseType === 'blob'` 的请求透传完整 `response` 对象（绕过业务码解包），所以调用方拿到的不是 `res.data`，而是完整 `response`：
+
+```js
+export function exportBookmarks() {
+  return request.get('/bookmarks/export', {
+    responseType: 'blob',   // 关键：二进制响应
+    timeout: 60000          // 文件可能数 MB
+  })
+}
+```
+
+调用方从 `response.data`（Blob）构造下载，文件名从 `response.headers['content-disposition']` 解析：
+
+```js
+const response = await exportBookmarks()
+const blob = new Blob([response.data], { type: 'text/html;charset=utf-8' })
+const url = URL.createObjectURL(blob)
+const a = document.createElement('a')
+a.href = url
+// 文件名优先取后端 Content-Disposition，失败前端兜底
+a.download = parseFilename(response.headers['content-disposition']) || `export_${Date.now()}.html`
+document.body.appendChild(a); a.click(); a.remove()
+URL.revokeObjectURL(url)
+```
+
+参考实现：`frontend/src/api/bookmark.js` 的 `exportBookmarks`、`BookmarkGrid.vue` 的 `handleExportConfirm`。
+
 ---
 
 ## 错误处理模式
