@@ -1,16 +1,21 @@
 /**
  * Token 存储工具模块
  *
- * 使用 sessionStorage 存储令牌，实现标签页级别的会话隔离。
- * sessionStorage 按标签页隔离：同一浏览器不同标签页拥有独立的存储空间，
- * 因此同一台电脑可以在不同标签页中同时登录不同账号，互不干扰。
- * 代价是关闭标签页后需要重新登录，但对于书签导航栏这种常驻标签页场景是合理的。
+ * 混合存储策略（解决浏览器重启后会话丢失的问题）：
+ * - access token → sessionStorage：按标签页隔离，支持不同标签页登录不同账号。
+ *   代价是关闭标签页即失效，但下面会用 refresh token 静默续期来弥补。
+ * - refresh token → localStorage：跨浏览器/系统重启存活。
+ *   这样重启电脑后重新打开网站时，access token 虽然没了，但 router 守卫能用
+ *   localStorage 里的 refresh token 换回新的 access token，无需再次登录。
+ *
+ * 安全性说明：refresh token 由后端在登出时加入黑名单（Redis），
+ * 前端仅作为"免重登"凭据存储；真正的权限校验始终在后端。
  */
 
 const TOKEN_KEY = 'hlaia_access_token'
 const REFRESH_KEY = 'hlaia_refresh_token'
 
-/** 获取访问令牌 */
+/** 获取访问令牌（sessionStorage，按标签页隔离） */
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY)
 }
@@ -20,20 +25,26 @@ export function setToken(token) {
   sessionStorage.setItem(TOKEN_KEY, token)
 }
 
-/** 获取刷新令牌 */
+/**
+ * 获取刷新令牌（localStorage，跨重启存活）
+ * 注意：与 access token 不同，这里用 localStorage，重启后仍在
+ */
 export function getRefreshToken() {
-  return sessionStorage.getItem(REFRESH_KEY)
+  return localStorage.getItem(REFRESH_KEY)
 }
 
 /** 设置刷新令牌 */
 export function setRefreshToken(token) {
-  sessionStorage.setItem(REFRESH_KEY, token)
+  localStorage.setItem(REFRESH_KEY, token)
 }
 
-/** 清除所有令牌（登出时调用） */
+/**
+ * 清除所有令牌（登出 / token 彻底失效时调用）
+ * 必须同时清两处存储，否则残留的 refresh token 会导致已登出账号被静默拉回
+ */
 export function clearTokens() {
   sessionStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(REFRESH_KEY)
+  localStorage.removeItem(REFRESH_KEY)
 }
 
 /** 解码 JWT payload，提取用户信息（不验证签名，前端仅用于读取） */
@@ -57,7 +68,8 @@ export function getUserFromToken() {
   const decoded = decodeToken(token)
   if (!decoded) return null
   if (decoded.exp && decoded.exp * 1000 < Date.now()) {
-    clearTokens()
+    // access token 过期只清自身，保留 localStorage 里的 refresh token 以便续期
+    sessionStorage.removeItem(TOKEN_KEY)
     return null
   }
   return decoded

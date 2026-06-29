@@ -30,6 +30,3 @@
 # Python cache
 **/__pycache__/
 **/*.pyc
-
-## archive tasks
-./tasks/archive

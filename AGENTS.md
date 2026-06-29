@@ -56,6 +56,9 @@ src/main/java/com/hlaia/
 - 不要 force push
 - 提交前确认用户意图
 
+### 环境变量
+
+- 本机 java25 环境变量详见 @AGENTS.local.md 。(如果存在)
 
 <!-- TRELLIS:START -->
 # Trellis Instructions

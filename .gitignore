@@ -37,7 +37,7 @@ build/
 .codex/
 .agents/
 .zcode/
-AGENTS.local.md
+*.local.md
 
 # Trellis workspace (personal developer data)
 .trellis/workspace/
