@@ -367,7 +367,8 @@ import BookmarkCard from './BookmarkCard.vue'
 import BatchToolbar from './BatchToolbar.vue'
 import FolderPickerDialog from './FolderPickerDialog.vue'
 import { useFolderStore } from '@/stores/folder'
-import { importBookmarks, exportBookmarks } from '@/api/bookmark'
+import { importBookmarks, getExportData } from '@/api/bookmark'
+import { renderExportHtml } from '@/utils/exportHtml'
 
 const { t } = useI18n()
 
@@ -924,32 +925,26 @@ function openExportDialog() {
 /**
  * 确认导出书签
  *
- * 文件下载流程：
- *   1. 调用 exportBookmarks()，拦截器对 blob 请求透传完整 response
- *   2. 从 response.data 取 Blob，构造可下载的 Object URL
- *   3. 创建临时 <a> 标签触发下载，文件名优先取后端 Content-Disposition 中的 filename
- *   4. 下载后释放 Object URL，避免内存泄漏
+ * 下载流程（前端生成 HTML）：
+ *   1. 调用 getExportData()，走标准 Result JSON，拦截器解包后 res.data 即 ExportDataResponse
+ *   2. 用 renderExportHtml(res.data) 把数据渲染成自包含可视化 HTML 字符串
+ *   3. 将 HTML 字符串包成 Blob，构造可下载的 Object URL
+ *   4. 创建临时 <a> 标签触发下载，文件名前端拼 bookmarks_<yyyyMMdd_HHmmss>.html
+ *   5. 下载后释放 Object URL，避免内存泄漏
  */
 async function handleExportConfirm() {
   exportLoading.value = true
   try {
-    const response = await exportBookmarks()
-    const blob = new Blob([response.data], { type: 'text/html;charset=utf-8' })
+    const res = await getExportData()
+    const html = renderExportHtml(res.data)
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
 
-    // 文件名：优先从后端 Content-Disposition 解析；失败则前端兜底生成
-    let filename = ''
-    const disposition = response.headers['content-disposition']
-    if (disposition) {
-      const match = disposition.match(/filename="?([^"]+)"?/i)
-      if (match && match[1]) filename = match[1]
-    }
-    if (!filename) {
-      const now = new Date()
-      const pad = (n) => String(n).padStart(2, '0')
-      const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
-      filename = `bookmarks_${ts}.html`
-    }
+    // 文件名：前端拼 bookmarks_<yyyyMMdd_HHmmss>.html
+    const now = new Date()
+    const pad = (n) => String(n).padStart(2, '0')
+    const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+    const filename = `bookmarks_${ts}.html`
 
     const a = document.createElement('a')
     a.href = url

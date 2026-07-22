@@ -57,6 +57,15 @@ const routes = [
     component: () => import('../views/admin/UserDetailView.vue'),
     meta: { auth: true, admin: true }
   },
+  // 仅开发期生效的导出页预览路由；生产构建会被守卫重定向，不进入正式菜单
+  ...(import.meta.env.DEV
+    ? [{
+        path: '/dev-export',
+        name: 'DevExportPreview',
+        component: () => import('../views/dev/ExportPreview.vue'),
+        meta: { guest: true }
+      }]
+    : []),
   {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
