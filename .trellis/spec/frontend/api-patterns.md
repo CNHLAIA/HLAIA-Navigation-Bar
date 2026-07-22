@@ -193,13 +193,13 @@ export function importBookmarks(formData) {
 
 ### 文件下载 / 二进制响应
 
-后端返回文件（如书签导出 HTML、CSV 导出、附件）时，响应体是二进制流而非 `{ code, message, data }` JSON。**必须配 `responseType: 'blob'`**，否则响应拦截器会把 Blob 当业务对象解析，`res.code` 为 `undefined`，被误判为业务错误并弹 `ElMessage.error`。
+后端返回文件（如 CSV 导出、附件）时，响应体是二进制流而非 `{ code, message, data }` JSON。**必须配 `responseType: 'blob'`**，否则响应拦截器会把 Blob 当业务对象解析，`res.code` 为 `undefined`，被误判为业务错误并弹 `ElMessage.error`。
 
 响应拦截器已对 `responseType === 'blob'` 的请求透传完整 `response` 对象（绕过业务码解包），所以调用方拿到的不是 `res.data`，而是完整 `response`：
 
 ```js
-export function exportBookmarks() {
-  return request.get('/bookmarks/export', {
+export function downloadSomething() {
+  return request.get('/xxx/download', {
     responseType: 'blob',   // 关键：二进制响应
     timeout: 60000          // 文件可能数 MB
   })
@@ -209,18 +209,42 @@ export function exportBookmarks() {
 调用方从 `response.data`（Blob）构造下载，文件名从 `response.headers['content-disposition']` 解析：
 
 ```js
-const response = await exportBookmarks()
-const blob = new Blob([response.data], { type: 'text/html;charset=utf-8' })
+const response = await downloadSomething()
+const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' })
 const url = URL.createObjectURL(blob)
 const a = document.createElement('a')
 a.href = url
 // 文件名优先取后端 Content-Disposition，失败前端兜底
-a.download = parseFilename(response.headers['content-disposition']) || `export_${Date.now()}.html`
+a.download = parseFilename(response.headers['content-disposition']) || `export_${Date.now()}.csv`
 document.body.appendChild(a); a.click(); a.remove()
 URL.revokeObjectURL(url)
 ```
 
-参考实现：`frontend/src/api/bookmark.js` 的 `exportBookmarks`、`BookmarkGrid.vue` 的 `handleExportConfirm`。
+> **注意：书签导出不走此模式。** 书签导出已改为「后端返回普通 JSON 数据 → 前端渲染可视化 HTML → Blob 下载」，不再有后端二进制流端点。见下方「前端生成文件下载」。
+
+### 前端生成文件下载
+
+当文件内容更适合在前端拼装（如可视化 HTML 页面、客户端报表）时，后端只返回普通 `Result<T>` JSON，前端拿到数据后用纯函数生成文件字符串再下载。这种模式的好处：改样式/结构零后端重启、可实时预览、下载与预览共用同一套模板。
+
+```js
+// 1. API：普通 JSON，无 responseType:'blob'
+export function getExportData() {
+  return request.get('/bookmarks/export-data')  // 走标准 Result 解包，res.data = 业务数据
+}
+
+// 2. 调用方：数据 → 纯函数渲染 → Blob 下载，文件名前端拼
+const res = await getExportData()
+const html = renderExportHtml(res.data)          // 纯函数：数据 → 自包含 HTML 字符串
+const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+const url = URL.createObjectURL(blob)
+const a = document.createElement('a')
+a.href = url
+a.download = `bookmarks_${formatTimestamp()}.html`  // 文件名前端生成
+document.body.appendChild(a); a.click(); a.remove()
+URL.revokeObjectURL(url)
+```
+
+参考实现：`frontend/src/api/bookmark.js` 的 `getExportData`、`utils/exportHtml.js` 的 `renderExportHtml`、`BookmarkGrid.vue` 的 `handleExportConfirm`。
 
 ---
 
