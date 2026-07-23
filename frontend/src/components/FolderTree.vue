@@ -37,6 +37,7 @@
         :delay-on-touch-only="true"
         ghost-class="drag-ghost"
         drag-class="drag-active"
+        @start="handleDragStart"
         @end="handleDragEnd"
       >
         <FolderTreeNode
@@ -49,6 +50,7 @@
           @rename="handleRename"
           @delete="handleDelete"
           @create-sub="handleCreateSub"
+          @drag-start="handleDragStart"
           @drag-end="handleDragEnd"
         />
       </VueDraggable>
@@ -113,11 +115,18 @@ const folderStore = useFolderStore()
 // ---- 拖拽数据（本地可修改的副本） ----
 // vue-draggable-plus 使用 v-model 进行双向绑定
 // 这里 writable computed 让 VueDraggable 可以直接修改 store 数据（拖拽排序时）
-// 拖拽结束后 @end 回调会调用 sortFolders API 持久化新顺序
+// 拖拽结束后 @end 回调会调用 sortFolders / moveFolder API 持久化新结构
 const treeData = computed({
   get: () => folderStore.folderTree,
   set: (val) => { folderStore.folderTree = val }
 })
+
+// ---- 拖拽前的 parentId 快照 ----
+// 拖拽结束后用来对比每个节点"跨父级移动了没有"：
+//   - parentId 变了 → 调 moveFolder（改父级）
+//   - parentId 没变 → 调 sortFolders（仅排序）
+// 用 Map 存储比每次递归查找旧 parentId 性能更好，且语义清晰
+const oldParentMap = ref(new Map())
 
 // ---- 对话框状态 ----
 const dialogVisible = ref(false)
@@ -221,25 +230,96 @@ async function handleDialogConfirm() {
 }
 
 /**
- * 拖拽结束：收集排序数据并提交到后端
+ * 递归收集：每个节点的 id -> 它当前所在父级的 id
+ * 关键：parentId 不是读节点自身的 node.parentId 字段，而是"从树结构推导"
+ *   - 根级数组的节点 → parentId = null（后端约定 null = 顶级）
+ *   - 某节点 children 数组里的节点 → parentId = 该节点 id
+ * 为什么不读 node.parentId？
+ *   vue-draggable-plus 跨容器拖动时只搬移 DOM/数组引用，不会同步更新被搬节点
+ *   的 parentId 字段，读它永远是旧值。位置才是真相。
  */
-function collectSortData(nodes) {
-  const result = []
+function collectPositionMap(nodes, parentId = null, map = new Map()) {
+  nodes.forEach((node) => {
+    map.set(node.id, parentId)
+    if (node.children && node.children.length > 0) {
+      collectPositionMap(node.children, node.id, map)
+    }
+  })
+  return map
+}
+
+/**
+ * 递归收集：排序数据 [{ id, sortOrder }]
+ * parentId 没变的节点走这里（纯排序）
+ */
+function collectSortData(nodes, result = []) {
   nodes.forEach((node, index) => {
     result.push({ id: node.id, sortOrder: index })
     if (node.children && node.children.length > 0) {
-      result.push(...collectSortData(node.children))
+      collectSortData(node.children, result)
     }
   })
   return result
 }
 
+/**
+ * 拖拽开始：记录每个节点的旧位置（按所在父级推导的 parentId）
+ * 拖拽结束后用来对比"谁跨父级了"
+ */
+function handleDragStart() {
+  oldParentMap.value = collectPositionMap(folderStore.folderTree)
+}
+
+/**
+ * 拖拽结束：对比新旧位置，分发到 moveFolder 或 sortFolders
+ *
+ * 为什么要对比位置而不是直接调 sortFolders？
+ *   vue-draggable-plus 的 group: 'folders' 让根级和每个子级容器之间可以互相拖动。
+ *   拖完那一刻 DOM 里节点确实换位置了，但：
+ *     - 如果只是同父级内换顺序 → 改的是 sortOrder，应调 sortFolders
+ *     - 如果换到了别的父级下   → 改的是 parentId，应调 moveFolder
+ *   之前只调了 sortFolders，导致跨父级拖拽后 fetchTree 重新拉取，
+ *   后端 parentId 没变，节点"弹回"原位 → 这就是"文件夹无法移动"的 bug 根源。
+ */
 async function handleDragEnd() {
-  const sortData = collectSortData(folderStore.folderTree)
+  // 拖拽前没记快照（比如组件刚挂载就触发了异常事件），降级为纯排序
+  if (oldParentMap.value.size === 0) {
+    try {
+      await folderStore.sortFolders(collectSortData(folderStore.folderTree))
+    } catch {
+      ElMessage.error(t('folders.toast.orderFailed'))
+      await folderStore.fetchTree()
+    }
+    return
+  }
+
+  const newParentMap = collectPositionMap(folderStore.folderTree)
+  const movedNodes = []   // 跨父级了的节点：{ id, newParentId }
+  for (const [id, newParentId] of newParentMap) {
+    if (oldParentMap.value.get(id) !== newParentId) {
+      movedNodes.push({ id, newParentId })
+    }
+  }
+
   try {
-    await folderStore.sortFolders(sortData)
+    if (movedNodes.length > 0) {
+      // 有跨父级移动：逐个调 moveFolder（改 parentId）
+      // 后端 isDescendant 校验会在循环引用时抛 400，走 catch 回滚
+      // moveFolder 内部已 fetchTree，移动后整树顺序由后端按现有 sortOrder 返回
+      for (const { id, newParentId } of movedNodes) {
+        await folderStore.moveFolder(id, { parentId: newParentId })
+      }
+    } else {
+      // 无跨父级移动：纯排序，提交整树的新顺序
+      await folderStore.sortFolders(collectSortData(folderStore.folderTree))
+    }
   } catch {
+    // moveFolder 失败（如循环引用被后端拒）→ fetchTree 已把树恢复到服务端真实状态
+    // sortFolders 失败 → 显式回滚
     ElMessage.error(t('folders.toast.orderFailed'))
+    await folderStore.fetchTree()
+  } finally {
+    oldParentMap.value = new Map()
   }
 }
 
@@ -258,7 +338,7 @@ const FolderTreeNode = defineComponent({
     depth: { type: Number, default: 0 },
     selectedId: { type: Number, default: null }
   },
-  emits: ['select', 'rename', 'delete', 'create-sub', 'drag-end'],
+  emits: ['select', 'rename', 'delete', 'create-sub', 'drag-start', 'drag-end'],
   setup(props, { emit }) {
     const { t } = useI18n()
     const expanded = ref(true)
@@ -355,7 +435,7 @@ const FolderTreeNode = defineComponent({
           ]) : null
         ]),
 
-        // 子节点（递归渲染，使用 VueDraggable 支持子级拖拽排序）
+        // 子节点（递归渲染，使用 VueDraggable 支持子级拖拽）
         hasChildren && expanded.value
           ? h(VueDraggable, {
               modelValue: props.node.children,
@@ -367,6 +447,7 @@ const FolderTreeNode = defineComponent({
               ghostClass: 'drag-ghost',
               dragClass: 'drag-active',
               class: 'tree-node-children',
+              onStart: (evt) => emit('drag-start', evt),
               onEnd: (evt) => emit('drag-end', evt)
             },
             {
@@ -380,6 +461,7 @@ const FolderTreeNode = defineComponent({
                   onRename: (data) => emit('rename', data),
                   onDelete: (data) => emit('delete', data),
                   onCreateSub: (id) => emit('create-sub', id),
+                  onDragStart: (evt) => emit('drag-start', evt),
                   onDragEnd: (evt) => emit('drag-end', evt)
                 })
               )
