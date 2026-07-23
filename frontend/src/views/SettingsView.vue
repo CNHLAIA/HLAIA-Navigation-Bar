@@ -313,11 +313,16 @@ async function handleChangePassword() {
 
 <style scoped>
 /* ---- 页面布局 ---- */
-/* 与 StagingView 保持一致的页面结构 */
+/*
+ * 固定钉死在视口高度，整页自身永不滚动，内容在 .settings-content 内部滚动。
+ * 详见 MainView 同名样式说明（min-height 无法约束 flex 链，100dvh 适配移动端地址栏）。
+ */
 .settings-layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--hlaia-bg);
 }
 
@@ -330,6 +335,7 @@ async function handleChangePassword() {
   width: 100%;
   margin: 0 auto;
   padding: 32px 24px 48px;
+  overflow-y: auto;
 }
 
 /* ---- 页面标题 ---- */

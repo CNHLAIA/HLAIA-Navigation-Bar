@@ -114,10 +114,28 @@ async function handleLogout() {
 </script>
 
 <style scoped>
+/*
+ * 主布局：固定钉死在视口高度，整个页面自身永不滚动。
+ *
+ * 为什么用 height 而不是 min-height：
+ *   以前 min-height: 100vh 只是"下限"，并不构成确定的高度边界。
+ *   当左侧文件夹树比视口还高时，flex 布局链没法可靠裁剪，
+ *   .main-layout 会撑出视口 → 浏览器滚动整页 → 底部出现空白、
+ *   "进页面要往下滑才到底"的现象。文件夹越多越明显。
+ *   改成确定高度后，内部滚动区（文件夹树 .tree-body / 书签 .main-content）
+ *   才会被父级高度约束，从而在自己内部滚动——正是"主页面固定、文件夹栏滚动"。
+ *
+ * 为什么用 100dvh：
+ *   100vh 在移动端 = 大视口（含地址栏后方），会比可见区域高，底部被地址栏遮住、
+ *   仍会产生一小段滚动。100dvh = 动态视口高度，随地址栏伸缩，移动端表现正确。
+ *   上面保留 100vh 作为旧浏览器回退。
+ */
 .main-layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--hlaia-bg);
   position: relative;
 }

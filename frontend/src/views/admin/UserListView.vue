@@ -265,10 +265,16 @@ function formatDate(dateStr) {
 </script>
 
 <style scoped>
+/*
+ * 固定钉死在视口高度，整页自身永不滚动，内容在 .admin-content 内部滚动。
+ * 详见 MainView 同名样式说明（min-height 无法约束 flex 链，100dvh 适配移动端地址栏）。
+ */
 .admin-layout {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--hlaia-bg);
 }
 
