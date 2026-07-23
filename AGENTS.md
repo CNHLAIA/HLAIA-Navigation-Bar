@@ -15,7 +15,7 @@ NavigationBar 是一个书签导航栏 Web 应用 + Chromium 浏览器扩展插�
 | API 文档 | SpringDoc OpenAPI 3.0.1 (Swagger UI) |
 | 前端 | Vue 3, Vite, Element Plus, Pinia, vue-draggable-plus |
 | 扩展 | Chromium Manifest V3 |
-| 部署 | Docker, 已有 app-network |
+| 部署 | Docker Compose（默认网络，服务间按容器名 DNS 互通） |
 
 ## 项目结构
 
