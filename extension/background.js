@@ -132,7 +132,45 @@ async function authFetch(url, options = {}) {
 }
 
 /**
- * 使用 refreshToken 获取新的 accessToken
+ * refresh 的并发去重锁
+ *
+ * 为什么需要这个？
+ *   后端 refreshToken 采用"一次性使用 + 旋转"策略：每次 refresh 成功后，
+ *   旧 refreshToken 会被加入黑名单立即作废（见后端 AuthService.refresh）。
+ *   如果同一时刻有两个请求都因 access token 过期而触发 refresh
+ *   （典型场景：切换标签页触发 tabs.onActivated 的同时，右键菜单的
+ *   contextMenus.onShown 也触发），两个 refreshAccessToken 会用同一个
+ *   旧 refreshToken 各发一次 /api/auth/refresh。后端只会让第一个成功并把
+ *   旧 token 拉黑，第二个必然命中黑名单失败 → clearAuthData() → 用户被
+ *   强制登出。这正是"老是莫名退出登录"的根因——它是竞态，不是定时触发，
+ *   所以表现得毫无规律。
+ *
+ *   解决办法：用模块级 Promise 做去重锁。第一个调用真正发起 refresh，
+ *   并发的后续调用复用同一个 Promise 等同一个结果。这样无论多少个 401
+ *   同时到达，后端只会收到一次 refresh 请求。
+ *   （对齐 frontend/src/api/request.js 的 isRefreshing + failedQueue 思路，
+ *    插件场景更简单，单个 Promise 锁即可。）
+ *
+ * @type {Promise<string|null>|null}
+ */
+let refreshPromise = null;
+
+/**
+ * 刷新 accessToken 的对外入口（带并发去重）
+ *
+ * 多个调用方同时触发时，只有第一个会真正请求后端，其余复用其结果。
+ *
+ * @returns {Promise<string|null>} - 新的 accessToken；刷新失败返回 null
+ */
+function refreshAccessToken() {
+  if (refreshPromise) return refreshPromise;
+  // 发起真正的刷新，无论成功失败都在结束后清空锁，供下次过期时再次使用
+  refreshPromise = doRefresh().finally(() => { refreshPromise = null; });
+  return refreshPromise;
+}
+
+/**
+ * 使用 refreshToken 获取新的 accessToken 的实际实现
  *
  * 调用后端接口：POST /api/auth/refresh?refreshToken=xxx
  * 后端返回：{ code: 200, data: { accessToken, refreshToken, username, role } }
@@ -141,9 +179,9 @@ async function authFetch(url, options = {}) {
  *   后端采用"旋转刷新令牌"策略——每次使用 refreshToken 后，旧的即失效，返回新的。
  *   所以每次刷新后必须保存最新的 refreshToken，否则下次刷新会失败。
  *
- * @returns {string|null} - 新的 accessToken；刷新失败返回 null
+ * @returns {Promise<string|null>} - 新的 accessToken；刷新失败返回 null
  */
-async function refreshAccessToken() {
+async function doRefresh() {
   const { refreshToken, serverUrl } = await chrome.storage.local.get(['refreshToken', 'serverUrl']);
   const baseUrl = serverUrl || 'https://nav.hlaia.top';
 
@@ -275,7 +313,29 @@ if (chrome.contextMenus.onShown) {
  *   3. authFetch 返回 null：用户未登录，移除子菜单
  *   4. 请求成功：移除旧的子菜单，根据文件夹树创建新的子菜单
  */
+/**
+ * 刷新文件夹菜单的对外入口（带运行锁）
+ *
+ * 为什么需要运行锁？
+ *   tabs.onActivated 与 contextMenus.onShown 可能在极短时间内同时触发，
+ *   导致两个 refreshFolderMenus 并发。后到的调用直接跳过：先到的请求很快
+ *   就会更新菜单，跳过不影响最终结果，还能避免两个并发请求对右键菜单做
+ *   交叉的 removeAll/create 造成菜单闪烁。
+ *   注：登录态的并发竞态已由 refreshAccessToken 的去重锁根治，这里只是
+ *   减少重复网络请求和菜单操作竞态。
+ */
+let refreshingFolders = false;
 async function refreshFolderMenus() {
+  if (refreshingFolders) return;
+  refreshingFolders = true;
+  try {
+    await refreshFolderMenusImpl();
+  } finally {
+    refreshingFolders = false;
+  }
+}
+
+async function refreshFolderMenusImpl() {
   const now = Date.now();
   if (now - lastFolderRefresh < FOLDER_REFRESH_INTERVAL) {
     return;
