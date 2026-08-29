@@ -1,5 +1,0 @@
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend code standards and forbidden patterns for AuthService/AuthController edits"}
-{"file": ".trellis/spec/backend/error-handling.md", "reason": "BusinessException + ErrorCode conventions used in refresh/logout error paths"}
-{"file": ".trellis/spec/frontend/api-patterns.md", "reason": "Axios/request module conventions for new refresh.js and request.js edits"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend code standards for router guard and api changes"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Auth contract spans backend/web/extension; keep failure semantics consistent across layers"}
