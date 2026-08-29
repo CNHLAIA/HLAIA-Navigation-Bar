@@ -11,8 +11,8 @@
  * - 只有访问该路由时才会加载对应的代码，减少首屏加载时间
  */
 import { createRouter, createWebHistory } from 'vue-router'
-import { getToken, getUserFromToken, getRefreshToken, setToken, setRefreshToken, clearTokens } from '@/utils/auth'
-import axios from 'axios'
+import { getToken, getUserFromToken, clearTokens } from '@/utils/auth'
+import { silentRefresh } from '@/api/refresh'
 
 const routes = [
   {
@@ -87,27 +87,28 @@ const router = createRouter({
  * 2. access token 完全丢失（如重启电脑 / 浏览器会话恢复清空了 sessionStorage），
  *    此时 refresh token 仍在 localStorage 里，可借此"免重登"恢复会话
  *
- * 直接用 axios 调用，避免循环依赖（request.js → auth.js → request.js）。
+ * 实际的请求和 token 持久化由 api/refresh.js 的 silentRefresh 完成，
+ * 这里只做失败分类决策（见其头部注释的 rejected / transient 约定）。
  *
- * @returns {Promise<boolean>} true=刷新成功；false=刷新失败（refresh token 缺失或被后端拒绝）
+ * @returns {Promise<boolean>} true=刷新成功；false=刷新失败
  */
 async function tryRefresh() {
-  const refreshTokenValue = getRefreshToken()
-  if (!refreshTokenValue) {
+  const result = await silentRefresh()
+  if (result.ok) {
+    return true
+  }
+
+  if (result.reason === 'rejected') {
+    // 后端明确拒绝（token 无效/已登出拉黑/用户已删除）：
+    // 永久性失败，彻底清空凭据，避免守卫下次再发无意义的刷新请求
+    clearTokens()
     return false
   }
-  try {
-    const res = await axios.post('/api/auth/refresh?refreshToken=' + encodeURIComponent(refreshTokenValue))
-    if (res.data?.code === 200 && res.data?.data) {
-      setToken(res.data.data.accessToken)
-      if (res.data.data.refreshToken) setRefreshToken(res.data.data.refreshToken)
-      return true
-    }
-  } catch {
-    // 网络异常或后端拒绝 refresh token
-  }
-  // refresh token 已失效，彻底清空，避免下次守卫再发无意义的刷新请求
-  clearTokens()
+
+  // 'no-token'（从未登录，无凭据可清）或 'transient'（断网/5xx/限流）：
+  // 保留 refresh token。瞬态失败时本次导航虽仍会跳登录页，
+  // 但网络恢复后下一次导航守卫会用保留的凭据静默换回登录态，
+  // 用户不会被迫重新输入密码——这是"持久登录"的关键容错路径。
   return false
 }
 

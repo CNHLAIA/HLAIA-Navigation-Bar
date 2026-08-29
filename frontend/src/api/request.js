@@ -10,8 +10,8 @@
  */
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { getToken, setToken, getRefreshToken, setRefreshToken, clearTokens } from '@/utils/auth'
-import { refreshToken as refreshTokenApi } from './auth'
+import { getToken, getRefreshToken, clearTokens } from '@/utils/auth'
+import { silentRefresh } from './refresh'
 import router from '@/router'
 
 const request = axios.create({
@@ -111,8 +111,12 @@ function handleTokenExpired() {
 }
 
 /**
- * HTTP 层 401 处理
- * 尝试用 refreshToken 续期，成功则重试原请求；失败则清除并跳转
+ * HTTP 层 401/403 处理
+ * 尝试用 refreshToken 续期，成功则重试原请求。
+ * 失败时按 silentRefresh 的分类决策（rejected / transient，见 api/refresh.js）：
+ *   - rejected（后端明确拒绝）→ 清凭据 + 跳登录页
+ *   - transient（断网/5xx/限流）→ 保留凭据，仅提示稍后重试，
+ *     网络恢复后路由守卫/下一次请求会自动恢复登录态
  */
 function handleTokenExpiredOnHttpLevel(error) {
   const originalRequest = error.config
@@ -137,23 +141,37 @@ function handleTokenExpiredOnHttpLevel(error) {
 
   isRefreshing = true
 
-  return refreshTokenApi(refreshTokenValue)
-    .then(res => {
-      const { accessToken, refreshToken: newRefreshToken } = res.data
-      setToken(accessToken)
-      if (newRefreshToken) setRefreshToken(newRefreshToken)
+  // silentRefresh 走裸 axios（无拦截器），避免 401 → 刷新 → 又 401 的递归
+  return silentRefresh()
+    .then(result => {
+      if (!result.ok) {
+        // 抛给下方 catch 统一按失败分类处理
+        throw result
+      }
+      processQueue(null, result.auth.accessToken)
 
-      processQueue(null, accessToken)
-
-      originalRequest.headers.Authorization = `Bearer ${accessToken}`
+      originalRequest.headers.Authorization = `Bearer ${result.auth.accessToken}`
       return request(originalRequest)
     })
-    .catch(err => {
-      processQueue(err, null)
-      ElMessage.error('登录已过期，请重新登录')
-      clearTokens()
-      router.replace('/login')
-      return Promise.reject(err)
+    .catch(result => {
+      // 区分两种入错来源：
+      //   1. 上面主动 throw 的 {ok:false, reason} —— 刷新失败，需要在这里决策
+      //   2. request(originalRequest) 重试自身的 axios 错误 ——
+      //      已经过响应拦截器提示过，直接透传，不再重复弹错
+      if (!result || typeof result.reason !== 'string') {
+        return Promise.reject(result)
+      }
+
+      processQueue(result, null)
+      if (result.reason === 'rejected') {
+        ElMessage.error('登录已过期，请重新登录')
+        clearTokens()
+        router.replace('/login')
+      } else {
+        // 瞬态失败：凭据仍在 localStorage（最长一年有效），绝不能清
+        ElMessage.error('登录状态暂时无法刷新，请检查网络后重试')
+      }
+      return Promise.reject(new Error('token refresh failed: ' + result.reason))
     })
     .finally(() => {
       isRefreshing = false
