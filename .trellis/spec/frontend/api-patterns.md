@@ -339,7 +339,12 @@ server: {
 
 ## Token 存储策略
 
-使用 `sessionStorage`（非 localStorage），实现标签页级别的会话隔离：
+混合存储（`frontend/src/utils/auth.js`）：
+
+- **access token → sessionStorage**（key `hlaia_access_token`）：按标签页隔离，
+  关闭标签页即失效，标签页恢复/重启后的空窗由静默刷新弥补。
+- **refresh token → localStorage**（key `hlaia_refresh_token`）：跨浏览器/系统
+  重启存活，是"持久登录"的根凭据（一年滑动有效期）。
 
 ```js
 // frontend/src/utils/auth.js
@@ -349,21 +354,38 @@ const REFRESH_KEY = 'hlaia_refresh_token'
 export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY)
 }
-
 export function setToken(token) {
   sessionStorage.setItem(TOKEN_KEY, token)
 }
-
+export function getRefreshToken() {
+  return localStorage.getItem(REFRESH_KEY)
+}
 export function clearTokens() {
   sessionStorage.removeItem(TOKEN_KEY)
-  sessionStorage.removeItem(REFRESH_KEY)
+  localStorage.removeItem(REFRESH_KEY)
 }
 ```
 
 设计理由：
-- sessionStorage 按标签页隔离，同一浏览器不同标签页可登录不同账号
-- 关闭标签页后 Token 自动清除，对书签导航栏这种常驻标签页场景合理
-- 前缀 `hlaia_` 避免与其他应用的 sessionStorage 键冲突
+- access token 短效（24h），放 sessionStorage 缩小泄露窗口
+- refresh token 必须活过重启，只能放 localStorage——这是重启后免重登的前提
+- 前缀 `hlaia_` 避免键冲突；扩展的 content script 依赖
+  `hlaia_refresh_token` 这个 key 从网页同步登录态，**改名前必须同步改
+  extension/content.js**
+
+### 静默刷新与失败分类契约
+
+认证失效的静默续期统一走 `frontend/src/api/refresh.js`（裸 axios，无拦截器，
+供 request.js 与路由守卫复用）。失败分两类，**跨端契约**（与
+extension/background.js doRefresh 保持一致，勿单边修改判定）：
+
+- `rejected`（后端明确拒绝，永久失败）：HTTP 200 + 业务码非 200 且非 2007，
+  或 HTTP 401/403 → 清凭据、跳登录页
+- `transient`（瞬态故障）：断网、超时、5xx、限流（业务码 2007）、JSON 解析失败
+  → **必须保留凭据**，下次导航/事件自动重试恢复
+
+后端契约：refresh token 不轮换（并发刷新全部成功）、每次刷新返回新 token 对
+（滑动一年有效期）、登出接口需带 `refreshToken` 参数一并拉黑（一处登出全端下线）。
 
 ### JWT 解码工具
 
