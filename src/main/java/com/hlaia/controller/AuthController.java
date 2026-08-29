@@ -142,14 +142,18 @@ public class AuthController {
      *   用 Void 表示 data 字段为 null，避免泛型警告。
      *
      * @param authHeader Authorization 请求头的值，格式为 "Bearer {token}"
+     * @param refreshToken Refresh Token（可选，从 URL 查询参数获取）
      * @return 无数据的成功响应
      */
     @PostMapping("/logout")
-    @Operation(summary = "Logout and blacklist the token")
-    public Result<Void> logout(@RequestHeader("Authorization") String authHeader) {
+    @Operation(summary = "Logout and blacklist the access/refresh tokens")
+    public Result<Void> logout(@RequestHeader("Authorization") String authHeader,
+                               @RequestParam(required = false) String refreshToken) {
         // 截取 "Bearer " 之后的部分，得到纯 Token 字符串
         String token = authHeader.substring(7);
-        authService.logout(token);
+        // refreshToken 可选：带上它才能实现"登出 = 全端下线"
+        // （Refresh Token 不再轮换、有效期长达一年，不拉黑它客户端就能静默续期）
+        authService.logout(token, refreshToken);
         return Result.success();
     }
 

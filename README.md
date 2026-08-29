@@ -296,7 +296,7 @@ Docker Compose 会启动两个容器：
 | `ELASTICSEARCH_URI` | Elasticsearch 地址 | `http://localhost:9200` |
 | `JWT_SECRET` | JWT 签名密钥 | 无默认值，必须显式提供 |
 | `JWT_ACCESS_TOKEN_EXPIRATION` | Access Token 有效期（毫秒） | `86400000` |
-| `JWT_REFRESH_TOKEN_EXPIRATION` | Refresh Token 有效期（毫秒） | `604800000` |
+| `JWT_REFRESH_TOKEN_EXPIRATION` | Refresh Token 有效期（毫秒），默认一年；每次刷新重新签发，构成滑动窗口 | `31536000000` |
 | `REGISTRY` | 局域网 Docker Registry 地址（构建 push / 部署 pull 共用） | `127.0.0.1:5000` |
 | `TZ` | 容器时区 | `Asia/Shanghai` |
 

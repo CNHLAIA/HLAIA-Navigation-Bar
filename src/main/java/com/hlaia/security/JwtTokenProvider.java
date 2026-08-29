@@ -100,7 +100,7 @@ public class JwtTokenProvider {
      *     jwt:
      *       secret: "my-secret-key"
      *       access-token-expiration: 86400000
-     *       refresh-token-expiration: 604800000
+     *       refresh-token-expiration: 31536000000
      *
      *   @Value("${jwt.secret}") 就会读取 jwt.secret 的值。
      *

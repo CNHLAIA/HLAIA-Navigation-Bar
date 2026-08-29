@@ -210,7 +210,7 @@ public class AuthService {
     // ==================== 登出 ====================
 
     /**
-     * 用户登出 —— 将 Token 加入 Redis 黑名单
+     * 用户登出 —— 将 Access Token（和 Refresh Token）加入 Redis 黑名单
      *
      * ============================================================
      * 为什么需要"黑名单"机制？JWT 不是说过期就自动失效吗？
@@ -226,31 +226,50 @@ public class AuthService {
      *   每次验证 Token 时，除了检查过期时间，还要检查它是否在黑名单中。
      *   如果在黑名单中，即使没过期也视为无效。
      *
+     * ============================================================
+     * 为什么现在登出必须同时拉黑 Refresh Token？（设计变更）
+     * ============================================================
+     *   Refresh Token 已改为"不轮换 + 365 天长有效期"（见 refresh 方法注释），
+     *   它成了一张长期通用的续期凭证：只拉黑 Access Token 的话，
+     *   客户端下次仍能用存着的 Refresh Token 静默换回新 Access Token，
+     *   "登出"就形同虚设。所以登出时要把 Refresh Token 一起拉黑，
+     *   实现"一处登出，全端（所有标签页 + 浏览器扩展）下线"。
+     *
+     *   refreshToken 参数设计为可选（nullable）：兼容只带 Access Token 的
+     *   旧客户端，缺省时退回旧行为（仅拉黑 Access Token）。
+     *
+     * @param token        Access Token 字符串（不含 "Bearer " 前缀）
+     * @param refreshToken Refresh Token 字符串（可为 null，旧客户端不传）
+     */
+    public void logout(String token, String refreshToken) {
+        blacklist(token);
+        if (refreshToken != null && !refreshToken.isEmpty()) {
+            blacklist(refreshToken);
+        }
+    }
+
+    /**
+     * 将单个 Token 加入 Redis 黑名单的辅助方法
+     *
      * 具体实现：
      *   - Key：  "jwt:blacklist:" + Token 字符串
      *   - Value："1"（任意值，我们只需要知道这个 Key 存不存在）
      *   - TTL：  Token 的剩余有效时间（毫秒）
-     *            过了这个时间，Token 本身就过期了，黑名单记录也可以自动删除
      *
      * 为什么 TTL 要设为 Token 的剩余有效时间？
      *   1. 节省 Redis 内存：Token 过期后黑名单记录也没用了，自动清除
      *   2. 精确控制：黑名单的有效期和 Token 的有效期完全同步
+     *   （Refresh Token 有效期长达一年，黑名单条目也会存活较久，
+     *    但条目只是一个很小的字符串，量级完全可忽略）
      *
-     *   类比：Token 就像一张电影票（有效期到电影结束），
-     *         黑名单就像"已退票记录"。退票后这张票即使还没到期也不能用了。
-     *         电影结束后（Token 过期），退票记录也没用了，可以清理掉。
-     *
-     * @param token JWT Token 字符串（不含 "Bearer " 前缀）
+     * @param token JWT Token 字符串
      */
-    public void logout(String token) {
+    private void blacklist(String token) {
         // 计算 Token 的剩余有效时间（毫秒）
-        // getExpirationFromToken 返回过期时间的 Date，需要减去当前时间得到剩余毫秒数
         Date expiration = jwtTokenProvider.getExpirationFromToken(token);
         long remainingMs = expiration.getTime() - System.currentTimeMillis();
 
         if (remainingMs > 0) {
-            // 将 Token 存入 Redis 黑名单，TTL = 剩余有效时间
-            // TimeUnit.MILLISECONDS 表示 remainingMs 的单位是毫秒
             redisTemplate.opsForValue().set(
                     "jwt:blacklist:" + token, "1", remainingMs, TimeUnit.MILLISECONDS);
         }
@@ -265,22 +284,31 @@ public class AuthService {
      *
      * 业务流程：
      *   1. 验证 Refresh Token 是否有效（格式正确、未过期、签名正确）
-     *   2. 检查 Refresh Token 是否在黑名单中（防止重复使用）
+     *   2. 检查 Refresh Token 是否在黑名单中（用户已登出则拒绝）
      *   3. 从 Token 中提取用户 ID，查询用户是否存在
-     *   4. 将旧的 Refresh Token 加入黑名单（一次性使用，用完即废）
-     *   5. 生成新的 Token 对返回
+     *   4. 生成新的 Token 对返回（Refresh Token 不作废，可重复刷新）
      *
-     * 为什么要"用完即废"（One-Time Use）？
-     *   如果 Refresh Token 可以重复使用，那么：
-     *   - 攻击者截获了一个 Refresh Token
-     *   - 他可以用它无限次地获取新的 Access Token
-     *   - 即使原始用户刷新了一次，攻击者之前截获的 Token 依然有效
-     *   所以每次使用后必须作废旧的，发一个新的。
+     * ============================================================
+     * 为什么不用"一次性轮换"（rotation，用完即废）？
+     * ============================================================
+     *   轮换要求每次刷新后立即作废旧 Refresh Token，但"作废"和
+     *   "客户端保存新 Token"不是原子操作，会带来两类必然竞态：
      *
-     * 为什么 logout 和 refresh 中都要检查黑名单？
-     *   - logout 中不需要检查黑名单（把已注销的 Token 再注销一次没有副作用）
-     *   - refresh 中必须检查，因为如果 Refresh Token 已被注销（用户已登出），
-     *     就不应该允许用它来获取新的 Token
+     *   1. 多标签页竞态：Refresh Token 存在 localStorage 被所有标签页共享，
+     *      浏览器重启恢复多个标签页时，各标签页会同时用它刷新。
+     *      轮换策略只让第一个成功，其余全部命中黑名单失败并清空本地凭据
+     *      → 全部标签页被强制登出（本项目曾是"经常莫名退出登录"的根因）。
+     *   2. 丢响应竞态：服务端已作废旧 Token、但新 Token 的响应在半路丢失
+     *      （如扩展 Service Worker 恰好被杀），客户端两头落空，必然登出。
+     *
+     *   本项目是单人自用部署，不存在"被盗 Token 回放"的威胁模型，
+     *   安全性让位于可用性：Refresh Token 允许重复使用，自然过期作废。
+     *   主动登出的场景由黑名单兜底——logout 时把 Refresh Token 拉黑，
+     *   它就不能再刷新了（见 logout 方法）。
+     *
+     * 为什么 refresh 中要检查黑名单？
+     *   如果 Refresh Token 已被登出拉黑，说明用户主动下线，
+     *   不应该允许它继续换取新的 Access Token。
      *
      * @param refreshToken 刷新令牌
      * @return 新的认证响应（包含新的 Access Token 和 Refresh Token）
@@ -292,10 +320,10 @@ public class AuthService {
             throw new BusinessException(ErrorCode.TOKEN_INVALID);
         }
 
-        // 第二步：检查 Token 是否在黑名单中（是否已被注销）
+        // 第二步：检查 Token 是否在黑名单中（是否已被登出注销）
         String blacklistKey = "jwt:blacklist:" + refreshToken;
         if (Boolean.TRUE.equals(redisTemplate.hasKey(blacklistKey))) {
-            // Token 已被加入黑名单，说明用户已登出或该 Token 已被使用过
+            // Token 已被加入黑名单，说明用户已登出
             throw new BusinessException(ErrorCode.TOKEN_INVALID);
         }
 
@@ -307,14 +335,7 @@ public class AuthService {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
 
-        // 第四步：将旧的 Refresh Token 加入黑名单（一次性使用，用完即废）
-        Date expiration = jwtTokenProvider.getExpirationFromToken(refreshToken);
-        long remainingMs = expiration.getTime() - System.currentTimeMillis();
-        if (remainingMs > 0) {
-            redisTemplate.opsForValue().set(blacklistKey, "1", remainingMs, TimeUnit.MILLISECONDS);
-        }
-
-        // 第五步：生成新的 Token 对
+        // 第四步：生成新的 Token 对（旧 Refresh Token 保持有效，不轮换）
         return generateAuthResponse(user);
     }
 
@@ -331,8 +352,8 @@ public class AuthService {
      *   双 Token 机制的安全设计：
      *   - Access Token：有效期短（如 30 分钟），用于日常接口访问
      *     即使泄露，影响时间窗口很小
-     *   - Refresh Token：有效期长（如 7 天），仅用于刷新 Access Token
-     *     使用频率低，被截获的概率更小
+     *   - Refresh Token：有效期长（一年滑动，见 refresh 方法的去轮换说明），
+     *     仅用于刷新 Access Token，使用频率低，被截获的概率更小
      *
      *   如果只用一个 Token：
      *     有效期短 → 用户频繁重新登录，体验差

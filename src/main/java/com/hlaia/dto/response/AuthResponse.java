@@ -50,7 +50,7 @@ public class AuthResponse {
     /**
      * 刷新令牌（Refresh Token）
      * 当 Access Token 过期后，前端用这个令牌获取新的 Access Token
-     * 有效期较长（如 7 天），用户不需要重新输入密码
+     * 有效期很长（一年，且每次刷新重新起算），用户不需要重新输入密码
      * 这样设计的好处：Access Token 短期有效即使泄露影响有限，Refresh Token 不常使用更安全
      */
     private String refreshToken;
