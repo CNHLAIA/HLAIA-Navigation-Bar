@@ -17,6 +17,17 @@
   "background": {
     "service_worker": "background.js"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://nav.hlaia.top/*",
+        "http://localhost:5173/*",
+        "http://192.168.8.6:13566/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": true

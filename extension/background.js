@@ -75,7 +75,7 @@ function makeNetworkErrorResponse() {
  * 带自动 Token 刷新的 API 请求封装
  *
  * 为什么需要这个函数？
- *   accessToken 有效期较短（24 小时），过期后需要用 refreshToken（7 天有效）换新的。
+ *   accessToken 有效期较短（24 小时），过期后需要用 refreshToken（一年有效）换新的。
  *   之前没有自动刷新逻辑，导致 Token 过期后用户必须手动重新登录。
  *   这个函数在收到 401 时自动尝试刷新 Token 并重试请求，用户无感知。
  *
@@ -135,19 +135,15 @@ async function authFetch(url, options = {}) {
  * refresh 的并发去重锁
  *
  * 为什么需要这个？
- *   后端 refreshToken 采用"一次性使用 + 旋转"策略：每次 refresh 成功后，
- *   旧 refreshToken 会被加入黑名单立即作废（见后端 AuthService.refresh）。
- *   如果同一时刻有两个请求都因 access token 过期而触发 refresh
+ *   同一时刻可能有多个请求因 access token 过期而触发 refresh
  *   （典型场景：切换标签页触发 tabs.onActivated 的同时，右键菜单的
- *   contextMenus.onShown 也触发），两个 refreshAccessToken 会用同一个
- *   旧 refreshToken 各发一次 /api/auth/refresh。后端只会让第一个成功并把
- *   旧 token 拉黑，第二个必然命中黑名单失败 → clearAuthData() → 用户被
- *   强制登出。这正是"老是莫名退出登录"的根因——它是竞态，不是定时触发，
- *   所以表现得毫无规律。
+ *   contextMenus.onShown 也触发）。虽然后端已去掉"一次性轮换"
+ *   （旧 refreshToken 不再作废，并发刷新全部成功），去重锁仍然值得保留：
+ *   并发时只发一次网络请求，其余调用复用同一个 Promise 的结果，
+ *   省掉重复流量，也避免多份响应交叉写 chrome.storage。
  *
  *   解决办法：用模块级 Promise 做去重锁。第一个调用真正发起 refresh，
- *   并发的后续调用复用同一个 Promise 等同一个结果。这样无论多少个 401
- *   同时到达，后端只会收到一次 refresh 请求。
+ *   并发的后续调用复用同一个 Promise 等同一个结果。
  *   （对齐 frontend/src/api/request.js 的 isRefreshing + failedQueue 思路，
  *    插件场景更简单，单个 Promise 锁即可。）
  *
@@ -175,11 +171,29 @@ function refreshAccessToken() {
  * 调用后端接口：POST /api/auth/refresh?refreshToken=xxx
  * 后端返回：{ code: 200, data: { accessToken, refreshToken, username, role } }
  *
- * 为什么刷新后还要保存新的 refreshToken？
- *   后端采用"旋转刷新令牌"策略——每次使用 refreshToken 后，旧的即失效，返回新的。
- *   所以每次刷新后必须保存最新的 refreshToken，否则下次刷新会失败。
+ * ============================================================
+ * 失败分类：明确拒绝 vs 瞬态故障（"持久登录"的核心容错约定）
+ * ============================================================
+ *   明确拒绝（后端裁定 token 已失效）：
+ *     - HTTP 200 + 业务码非 200 且非 2007（如 1004 无效/已登出拉黑、用户已删除）
+ *     - HTTP 401 / 403
+ *     → 清除本地凭据并引导重新登录（永久性失败）
  *
- * @returns {Promise<string|null>} - 新的 accessToken；刷新失败返回 null
+ *   瞬态故障（凭据本身没问题）：
+ *     - 网络异常（fetch 抛错，含 status:0 伪响应场景）
+ *     - HTTP 5xx（后端部署中、网关 502 等）
+ *     - 业务码 2007（限流）
+ *     → 保留凭据静默返回 null，下次事件触发时自动重试。
+ *       refresh token 有效期长达一年，保留它就能永远自动恢复。
+ *       （曾经 502 一次就被 clearAuthData 踢下线，正是"莫名退出登录"的帮凶）
+ *
+ * 为什么刷新后还要保存新的 refreshToken？
+ *   后端每次刷新都返回新的 token 对用于滑动延长有效期
+ *   （一年有效期从每次刷新重新起算）。旧 refreshToken 依然有效
+ *   （后端已去掉一次性轮换，多端并发刷新互不干扰），
+ *   但保存最新的可以让"距过期最远"，也和网页端保持一致。
+ *
+ * @returns {Promise<string|null>} - 新的 accessToken；失败返回 null
  */
 async function doRefresh() {
   const { refreshToken, serverUrl } = await chrome.storage.local.get(['refreshToken', 'serverUrl']);
@@ -194,31 +208,50 @@ async function doRefresh() {
       { method: 'POST' }
     );
 
-    if (response.ok) {
-      const result = await response.json();
-      if (result.code === 200 && result.data) {
-        const authData = result.data;
-        // 保存新的 Token 和用户信息到 chrome.storage.local
-        await chrome.storage.local.set({
-          token: authData.accessToken,
-          refreshToken: authData.refreshToken,
-          username: authData.username,
-          role: authData.role
-        });
-        return authData.accessToken;
-      }
+    let result = null;
+    // 单独保护 JSON 解析：网关偶发返回 HTML 错误页时 json() 会抛 SyntaxError，
+    // 应归为瞬态故障而非明确拒绝
+    try {
+      result = await response.json();
+    } catch (e) {
+      console.warn('Invalid JSON from refresh:', e?.message || e);
+      return null;
     }
 
-    // refreshToken 也过期了（或无效），清除所有认证数据
-    await clearAuthData();
-    showNotification('登录已过期', '请打开扩展设置页重新登录');
-    chrome.runtime.openOptionsPage();
+    if (response.ok && result.code === 200 && result.data) {
+      // 成功：保存新的 Token 和用户信息到 chrome.storage.local
+      const authData = result.data;
+      await chrome.storage.local.set({
+        token: authData.accessToken,
+        refreshToken: authData.refreshToken,
+        username: authData.username,
+        role: authData.role
+      });
+      return authData.accessToken;
+    }
+
+    // 后端明确拒绝 → 本地凭据已无意义，彻底清理。
+    // 判定与 frontend/src/api/refresh.js 保持一致（跨端契约，勿单边修改）：
+    //   - HTTP 200 + 业务码非 200 且非 2007（如 1004 无效/拉黑、用户已删除）
+    //   - HTTP 401 / 403
+    // 业务码 200 但缺 data 视为服务端异常，归入下方的瞬态故障
+    const explicitlyRejected =
+      (response.ok && result.code !== 200 && result.code !== 2007) ||
+      response.status === 401 ||
+      response.status === 403;
+    if (explicitlyRejected) {
+      await clearAuthData();
+      showNotification('登录已过期', '请打开扩展设置页重新登录');
+      chrome.runtime.openOptionsPage();
+      return null;
+    }
+
+    // 其余情况（5xx、限流 2007 等）均为瞬态故障：保留凭据，下次自动重试。
+    // 用 warn 而非 error：不应触发 chrome://extensions 卡片的红色错误标志。
+    console.warn('Transient refresh failure, credentials kept:', response.status, result.code);
     return null;
   } catch (error) {
-    // 用 warn 而非 error：网络抖动导致的 refresh 失败是预期内的偶发状况，
-    // 不应触发 chrome://extensions 卡片的红色错误标志。
-    // 注意此处不清理 token——refresh 本身可能是临时网络问题，
-    // 留着 token 下次请求成功后仍可用。
+    // 网络层异常（断网、DNS 失败、服务器完全不可达）：瞬态故障，保留凭据。
     console.warn('Failed to refresh token:', error?.message || error);
     return null;
   }
@@ -237,6 +270,66 @@ async function clearAuthData() {
   if (serverUrl) {
     await chrome.storage.local.set({ serverUrl });
   }
+}
+
+// ============================================================
+// 登录态自动同步（content script → background）
+// ============================================================
+
+/**
+ * 解码 JWT payload，提取用户信息（不验证签名，仅读取 claims）
+ *
+ * 为什么 background 需要解码 JWT？
+ *   content script 从网页 localStorage 同步来的只有 refreshToken 本身，
+ *   而 options 页展示"已登录"状态需要 username / role。
+ *   这两项就写在 JWT 的 payload（第二段）里，本地 base64 解码即可获得，
+ *   不必再发一次请求。签名校验由后端完成，这里只是读取展示用途。
+ *   （与 frontend/src/utils/auth.js 的 decodeToken 逻辑一致）
+ *
+ * @param {string} token - JWT 字符串（Header.Payload.Signature）
+ * @returns {Object|null} payload 对象；解析失败返回 null
+ */
+function decodeJwtPayload(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    );
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 处理来自 content script 的登录态同步
+ *
+ * 场景：用户在网页端登录导航站后，网页的 localStorage 里存有
+ * hlaia_refresh_token（一年有效）。content script 检测到它后把扩展
+ * "自动登录"，用户无需在扩展设置页再输一遍账号密码。
+ *
+ * 设计要点：
+ *   - 幂等：token 与已存储的相同则直接返回，避免每次打开网页都打后端。
+ *     （后端虽已允许同一 token 重复刷新，但省掉无谓的网络请求总归更好）
+ *   - 同步后立即 refreshAccessToken() 换出 accessToken，右键菜单
+ *     马上就能用；若失败（如网络抖动）凭据仍在，下次事件自动重试。
+ *
+ * @param {string} refreshToken - 从网页 localStorage 读到的刷新令牌
+ */
+async function handleSyncLogin(refreshToken) {
+  const { refreshToken: stored } = await chrome.storage.local.get('refreshToken');
+  if (stored === refreshToken) return;
+
+  const claims = decodeJwtPayload(refreshToken);
+  await chrome.storage.local.set({
+    refreshToken,
+    ...(claims?.username ? { username: claims.username } : {}),
+    ...(claims?.role ? { role: claims.role } : {})
+  });
+
+  lastFolderRefresh = 0;
+  await refreshAccessToken();
+  await refreshFolderMenus();
 }
 
 // ============================================================
@@ -675,6 +768,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   } else if (message.type === 'LOGOUT') {
     removeDynamicMenus().catch(e => console.warn('removeDynamicMenus (logout):', e?.message || e));
+    sendResponse({ success: true });
+  } else if (message.type === 'SYNC_LOGIN' && message.refreshToken) {
+    // 只信任本扩展 content script 发来的同步消息（sender.id 校验），
+    // 防止其他来源伪造登录态注入。
+    if (sender.id === chrome.runtime.id) {
+      handleSyncLogin(message.refreshToken)
+        .catch(e => console.warn('handleSyncLogin:', e?.message || e));
+    }
     sendResponse({ success: true });
   }
   return true;

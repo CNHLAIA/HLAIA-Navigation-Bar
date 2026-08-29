@@ -155,21 +155,77 @@ loginBtn.addEventListener('click', async () => {
 // ============================================================
 
 /**
+ * 尽力通知后端登出（把 access/refresh token 加入 Redis 黑名单）
+ *
+ * 为什么扩展登出也必须调后端？
+ *   refresh token 已是"一年有效、不轮换"的长期共享凭据（网页端
+ *   localStorage 里也存着同一份）。只清本地存储的话：
+ *   - 网页端仍处于登录态；
+ *   - 下次打开导航站页面，content script 还会把网页里的 token 同步回来，
+ *     扩展"登出了又被自动登录"，登出形同虚设。
+ *   所以后端必须把 refresh token 拉黑，实现"一处登出，全端下线"。
+ *
+ * 为什么是"尽力而为"（best-effort）？
+ *   登出的本地清理不应被网络问题卡住。后端不可达时依然完成本地登出，
+ *   只是服务端 token 会在自然过期前保持有效（单人自用可接受）。
+ *
+ * @param {string} baseUrl - API 服务器地址
+ * @param {string|null} accessToken - 本地存储的 access token（可能已过期）
+ * @param {string|null} refreshToken - 本地存储的 refresh token
+ * @returns {Promise<void>}
+ */
+async function blacklistTokensOnServer(baseUrl, accessToken, refreshToken) {
+  try {
+    // access token 可能已过期（后端会拒绝过期的 Authorization 头），
+    // 先用 refresh token 换一个新鲜的，保证 logout 调用能通过认证；
+    // 换取失败再退回本地旧 token 试一次（万一还没过期）
+    let tokenToUse = accessToken;
+    if (refreshToken) {
+      const refreshRes = await fetch(
+        `${baseUrl}/api/auth/refresh?refreshToken=${encodeURIComponent(refreshToken)}`,
+        { method: 'POST' }
+      );
+      if (refreshRes.ok) {
+        const result = await refreshRes.json();
+        if (result.code === 200 && result.data) {
+          tokenToUse = result.data.accessToken;
+        }
+      }
+    }
+
+    if (!tokenToUse) return;
+
+    await fetch(
+      `${baseUrl}/api/auth/logout?refreshToken=${encodeURIComponent(refreshToken || '')}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${tokenToUse}` }
+      }
+    );
+    // 无论响应如何都不抛错：登出接口失败不影响本地清理
+  } catch (e) {
+    console.warn('Server-side logout failed (continuing local logout):', e?.message || e);
+  }
+}
+
+/**
  * 退出登录按钮点击事件
  *
  * 流程：
- *   1. 清除 chrome.storage.local 中的所有认证数据
- *   2. 通知 background.js 用户已登出（让它清除文件夹菜单）
- *   3. 更新页面显示为"未登录"状态
- *
- * 注意：这里不调用后端的 /api/auth/logout 接口
- *   因为后端的 logout 会把 Token 加入黑名单（存入 Redis），
- *   对于扩展来说，直接清除本地存储就足够了。
- *   如果后续需要更严格的登出策略，可以加上后端调用。
+ *   1. 通知后端拉黑 access/refresh token（见 blacklistTokensOnServer）
+ *   2. 清除 chrome.storage.local 中的所有认证数据
+ *   3. 通知 background.js 用户已登出（让它清除文件夹菜单）
+ *   4. 更新页面显示为"未登录"状态
  */
 logoutBtn.addEventListener('click', async () => {
+  // 登出前取出所需数据（storage.clear 会把它们一并清掉）
+  const { token, refreshToken, serverUrl } = await chrome.storage.local.get(['token', 'refreshToken', 'serverUrl']);
+  const baseUrl = serverUrl || 'https://nav.hlaia.top';
+
+  // 先拉黑服务端 token，再做本地清理（顺序重要：清理后凭据就没了）
+  await blacklistTokensOnServer(baseUrl, token, refreshToken);
+
   // 保留 serverUrl 配置，只清除认证相关数据
-  const { serverUrl } = await chrome.storage.local.get('serverUrl');
   await chrome.storage.local.clear();
   if (serverUrl) {
     await chrome.storage.local.set({ serverUrl });
