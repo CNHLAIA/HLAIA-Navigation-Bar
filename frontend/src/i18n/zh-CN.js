@@ -142,6 +142,7 @@ export default {
       fileTip: '仅支持 Chrome 浏览器导出的 HTML 书签文件',
       targetFolder: '目标文件夹',
       targetFolderHint: '书签将导入到选中的文件夹下',
+      rootLevel: '根层级',
       duplicateMode: '重复处理',
       overwrite: '覆盖更新',
       skip: '跳过',

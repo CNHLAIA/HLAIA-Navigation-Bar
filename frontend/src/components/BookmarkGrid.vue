@@ -65,8 +65,13 @@
             {{ bookmarkStore.bookmarks.length }}
           </span>
         </div>
-        <div v-if="folderId" class="grid-top-actions">
+        <!--
+          导入/导出面向整棵书签树，与当前是否选中文件夹无关，必须常驻可见（空账号也要能导入）；
+          刷新/新增书签只作用于当前文件夹，保留 folderId 门控
+        -->
+        <div class="grid-top-actions">
           <button
+            v-if="folderId"
             class="refresh-btn"
             :title="t('bookmarks.refresh')"
             @click="handleRefresh"
@@ -96,6 +101,7 @@
             {{ t('bookmarks.exportDialog.title') }}
           </button>
           <button
+            v-if="folderId"
             class="add-bookmark-btn"
             @click="openCreateDialog"
           >
@@ -282,6 +288,21 @@
         <div class="import-section">
           <label class="import-label">{{ t('bookmarks.importDialog.targetFolder') }}</label>
           <div class="import-folder-picker">
+            <!--
+              根层级选项：置顶、与顶层文件夹同缩进，value 用 null 表示；
+              空账号（无任何文件夹）时它是唯一可选项，保证导入入口始终可用
+            -->
+            <div
+              class="import-folder-item"
+              :class="{ 'is-selected': importTargetFolderId === null }"
+              :style="{ paddingLeft: '12px' }"
+              @click="importTargetFolderId = null"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M1.75 4.083V11.083a1.167 1.167 0 0 0 1.167 1.167H11.083a1.167 1.167 0 0 0 1.167-1.167V5.833a1.167 1.167 0 0 0-1.167-1.167H7L5.833 3.25H2.917A1.167 1.167 0 0 0 1.75 4.417" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>{{ t('bookmarks.importDialog.rootLevel') }}</span>
+            </div>
             <div
               v-for="node in importFolderList"
               :key="node.id"
@@ -459,6 +480,7 @@ const importLoading = ref(false)
 const importUploadRef = ref(null)
 const importFileList = ref([])
 const importSelectedFile = ref(null)
+/** 导入目标文件夹 ID，null 表示根层级（导入内容直接挂到书签树顶层，与导出结构一致） */
 const importTargetFolderId = ref(null)
 const importDuplicateMode = ref('OVERWRITE')
 
@@ -842,7 +864,9 @@ async function handleDialogConfirm() {
 
 /**
  * 打开导入书签对话框
- * 默认目标文件夹为当前文件夹，重复模式为覆盖更新
+ * 默认目标：已选中文件夹 → 该文件夹（保持既有便利）；未选中（含空账号）→ 根层级
+ * props.folderId 未选中时本身就是 null（即根层级），无需分支判断
+ * 重复模式为覆盖更新
  */
 function openImportDialog() {
   importTargetFolderId.value = props.folderId
@@ -854,7 +878,7 @@ function openImportDialog() {
 
 /**
  * 重置导入对话框状态
- * 在对话框关闭时调用，清空文件选择等
+ * 在对话框关闭时调用，清空文件选择等（目标文件夹回退到与打开时相同的默认规则）
  */
 function resetImportDialog() {
   importFileList.value = []
@@ -895,7 +919,11 @@ async function handleImportConfirm() {
     // 构建 multipart/form-data 表单数据
     const formData = new FormData()
     formData.append('file', importSelectedFile.value.raw)
-    formData.append('targetFolderId', importTargetFolderId.value)
+    // 选根层级（null）时绝不能 append：FormData 会把 null 序列化成字符串 "null"，
+    // 后端 Long 转换直接报错；省略该字段（后端 required=false）即导入到根层级
+    if (importTargetFolderId.value !== null) {
+      formData.append('targetFolderId', importTargetFolderId.value)
+    }
     formData.append('duplicateMode', importDuplicateMode.value)
 
     const res = await importBookmarks(formData)

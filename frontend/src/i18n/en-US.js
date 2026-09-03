@@ -142,6 +142,7 @@ export default {
       fileTip: 'Only Chrome bookmark HTML files are supported',
       targetFolder: 'Target Folder',
       targetFolderHint: 'Bookmarks will be imported under the selected folder',
+      rootLevel: 'Root level',
       duplicateMode: 'Duplicate Handling',
       overwrite: 'Overwrite',
       skip: 'Skip',
