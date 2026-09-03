@@ -19,6 +19,7 @@
 | [状态管理](./state-management.md) | Pinia Setup Store 模式、Store 与 API 交互 | Done |
 | [API 模式](./api-patterns.md) | Axios 封装、拦截器、Token 刷新、错误处理 | Done |
 | [质量规范](./quality-guidelines.md) | CSS 变量、i18n、响应式、禁止模式、审查清单 | Done |
+| [书签导入/导出契约](../guides/bookmark-import-export-contract.md) | Netscape 格式导出↔后端导入解析的跨层契约 | Done |
 
 ---
 

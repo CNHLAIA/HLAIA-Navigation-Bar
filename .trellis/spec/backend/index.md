@@ -19,6 +19,7 @@ This directory contains guidelines for backend development. Each file documents 
 | [Error Handling](./error-handling.md) | Error types, handling strategies | Done |
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | Done |
 | [Logging Guidelines](./logging-guidelines.md) | Structured logging, log levels | Done |
+| [Bookmark Import/Export Contract](../guides/bookmark-import-export-contract.md) | Netscape format contract shared with frontend renderer | Done |
 
 ---
 
