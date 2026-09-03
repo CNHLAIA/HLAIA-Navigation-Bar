@@ -383,6 +383,29 @@ export default {
         newLength: '新密码至少6个字符',
         confirmRequired: '请确认新密码'
       }
+    },
+    proxy: {
+      title: '图标抓取代理',
+      adminOnly: '仅管理员',
+      description: '书签图标的抓取出口。配置 HTTP 代理（如 mihomo 的 mixed 端口）后才能抓取国外网站的图标；国内外分流由代理软件的规则处理，保存后立即生效。',
+      enabled: '启用代理',
+      host: '代理地址',
+      hostPlaceholder: '例如 192.168.8.6',
+      port: '端口',
+      portPlaceholder: '例如 7890',
+      save: '保存配置',
+      test: '测试连通性',
+      toast: {
+        saved: '代理配置已保存并生效',
+        saveFailed: '保存失败',
+        loadFailed: '加载代理配置失败',
+        hostRequired: '启用代理时必须填写代理地址',
+        portRequired: '启用代理时必须填写端口'
+      },
+      testResult: {
+        success: '代理可用，耗时 {ms} ms',
+        failed: '代理不可用：{reason}'
+      }
     }
   }
 }

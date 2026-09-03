@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.net.InetAddress;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
@@ -46,13 +45,11 @@ public class IconFetchService {
     private final BookmarkMapper bookmarkMapper;
 
     /**
-     * 共享的 HttpClient 实例（避免每次请求都创建新实例）
-     * 设置 5 秒连接超时和自动跟随重定向
+     * 出站 HTTP 客户端提供者——按系统设置动态决定直连或走代理。
+     * 国外站（如 github、civitai）直连超时时，管理员配置代理后
+     * 创建书签也能成功回填 icon_url。
      */
-    private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    private final ProxyHttpClientProvider httpClientProvider;
 
     /**
      * 异步抓取 favicon 并回填到 bookmark.icon_url
@@ -132,10 +129,16 @@ public class IconFetchService {
      */
     private String fetchFromHtml(String pageUrl, String domain) {
         try {
-            Document doc = Jsoup.connect(pageUrl)
+            var connection = Jsoup.connect(pageUrl)
                     .userAgent("Mozilla/5.0 (compatible; HlaiaNav/1.0)")
-                    .timeout(5000)
-                    .get();
+                    .timeout(5000);
+            // 配置了代理时 HTML 抓取同样走代理（与 HttpClient 行为保持一致，
+            // 否则国外站的 HTML 解析依然直连超时）
+            var proxy = httpClientProvider.faviconProxy();
+            if (proxy.enabled()) {
+                connection.proxy(proxy.host(), proxy.port());
+            }
+            Document doc = connection.get();
 
             // 按 rel 优先级查找：先找 "icon" / "shortcut icon"（排除 apple-touch-icon）
             for (Element link : doc.select("link[rel~=(?i)^(?!apple-touch).*$]")) {
@@ -177,7 +180,9 @@ public class IconFetchService {
                     .timeout(Duration.ofSeconds(5))
                     .method("HEAD", HttpRequest.BodyPublishers.noBody())
                     .build();
-            HttpResponse<Void> response = HTTP_CLIENT.send(request, HttpResponse.BodyHandlers.discarding());
+            // HttpClient 来自 provider：当前配置了代理时自动走代理出站
+            HttpResponse<Void> response = httpClientProvider.faviconHttpClient().send(request,
+                    HttpResponse.BodyHandlers.discarding());
             if (response.statusCode() == 200) {
                 return url;
             }

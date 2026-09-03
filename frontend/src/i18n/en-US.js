@@ -383,6 +383,29 @@ export default {
         newLength: 'New password must be at least 6 characters',
         confirmRequired: 'Please confirm new password'
       }
+    },
+    proxy: {
+      title: 'Favicon Fetch Proxy',
+      adminOnly: 'Admin only',
+      description: 'Outbound proxy for favicon fetching. Configure an HTTP proxy (e.g. mihomo mixed port) so icons of blocked foreign sites can be fetched. Domestic/foreign routing is handled by the proxy rules. Takes effect immediately after saving.',
+      enabled: 'Enable proxy',
+      host: 'Proxy host',
+      hostPlaceholder: 'e.g. 192.168.8.6',
+      port: 'Port',
+      portPlaceholder: 'e.g. 7890',
+      save: 'Save',
+      test: 'Test connectivity',
+      toast: {
+        saved: 'Proxy settings saved and applied',
+        saveFailed: 'Failed to save',
+        loadFailed: 'Failed to load proxy settings',
+        hostRequired: 'Proxy host is required when enabled',
+        portRequired: 'Proxy port is required when enabled'
+      },
+      testResult: {
+        success: 'Proxy works, {ms} ms',
+        failed: 'Proxy unreachable: {reason}'
+      }
     }
   }
 }

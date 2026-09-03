@@ -124,6 +124,65 @@
           </el-form-item>
         </el-form>
       </div>
+      <!-- 卡片3：图标抓取代理（仅管理员可见，系统级配置） -->
+      <div v-if="authStore.isAdmin" class="settings-card">
+        <h2 class="card-title">
+          {{ t('settings.proxy.title') }}
+          <span class="admin-badge">{{ t('settings.proxy.adminOnly') }}</span>
+        </h2>
+
+        <p class="card-description">{{ t('settings.proxy.description') }}</p>
+
+        <el-form label-position="top" class="settings-form" @submit.prevent>
+          <el-form-item :label="t('settings.proxy.enabled')">
+            <el-switch v-model="proxyForm.enabled" />
+          </el-form-item>
+
+          <!-- 开关打开后才显示地址/端口输入，减少关闭状态下的视觉噪音 -->
+          <template v-if="proxyForm.enabled">
+            <el-form-item :label="t('settings.proxy.host')">
+              <el-input
+                v-model="proxyForm.host"
+                :placeholder="t('settings.proxy.hostPlaceholder')"
+                maxlength="100"
+                clearable
+              />
+            </el-form-item>
+
+            <el-form-item :label="t('settings.proxy.port')">
+              <el-input
+                v-model="proxyForm.port"
+                :placeholder="t('settings.proxy.portPlaceholder')"
+                inputmode="numeric"
+                clearable
+              />
+            </el-form-item>
+          </template>
+
+          <el-form-item>
+            <div class="proxy-actions">
+              <button
+                type="button"
+                class="action-btn"
+                :disabled="proxySaving || proxyTesting"
+                @click="handleSaveProxy"
+              >
+                <span v-if="proxySaving" class="btn-spinner"></span>
+                {{ t('settings.proxy.save') }}
+              </button>
+              <button
+                type="button"
+                class="action-btn action-btn-secondary"
+                :disabled="proxySaving || proxyTesting"
+                @click="handleTestProxy"
+              >
+                <span v-if="proxyTesting" class="btn-spinner"></span>
+                {{ t('settings.proxy.test') }}
+              </button>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
     </main>
   </div>
 </template>
@@ -146,6 +205,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import NavBar from '@/components/NavBar.vue'
 import { getProfile, updateProfile, changePassword } from '@/api/user'
+import { getFaviconProxy, updateFaviconProxy, testFaviconProxy } from '@/api/settings'
 import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
@@ -238,6 +298,74 @@ const passwordRules = {
   ]
 }
 
+// ---- 图标抓取代理表单（仅管理员；卡片本身用 v-if 隐藏） ----
+const proxyForm = reactive({
+  enabled: false,
+  host: '',
+  // 端口用字符串承接输入框，提交时转换——el-input 直接绑数字在清空时会报类型警告
+  port: ''
+})
+const proxySaving = ref(false)
+const proxyTesting = ref(false)
+
+/**
+ * 前端联动校验：开关打开时 host/port 必填
+ * （后端也校验同一规则，这里先行拦截给出即时反馈）
+ */
+function validateProxyForm() {
+  if (!proxyForm.enabled) return true
+  if (!proxyForm.host.trim()) {
+    ElMessage.warning(t('settings.proxy.toast.hostRequired'))
+    return false
+  }
+  const port = Number(proxyForm.port)
+  if (!proxyForm.port || !Number.isInteger(port) || port < 1 || port > 65535) {
+    ElMessage.warning(t('settings.proxy.toast.portRequired'))
+    return false
+  }
+  return true
+}
+
+/** 组装提交体（port 统一转数字） */
+function proxyPayload() {
+  return {
+    enabled: proxyForm.enabled,
+    host: proxyForm.host.trim(),
+    port: Number(proxyForm.port)
+  }
+}
+
+async function handleSaveProxy() {
+  if (!validateProxyForm()) return
+  proxySaving.value = true
+  try {
+    await updateFaviconProxy(proxyPayload())
+    ElMessage.success(t('settings.proxy.toast.saved'))
+  } catch {
+    ElMessage.error(t('settings.proxy.toast.saveFailed'))
+  } finally {
+    proxySaving.value = false
+  }
+}
+
+/** 用表单里"还没保存"的配置直接测试，方便填完立刻验证 */
+async function handleTestProxy() {
+  if (!validateProxyForm()) return
+  proxyTesting.value = true
+  try {
+    const res = await testFaviconProxy(proxyPayload())
+    if (res.data.success) {
+      ElMessage.success(t('settings.proxy.testResult.success', { ms: res.data.latencyMs }))
+    } else {
+      ElMessage.error(t('settings.proxy.testResult.failed', { reason: res.data.message }))
+    }
+  } catch {
+    ElMessage.error(t('settings.proxy.toast.saveFailed'))
+  } finally {
+    proxyTesting.value = false
+  }
+}
+
 // ---- 生命周期：页面加载时获取用户信息 ----
 
 onMounted(async () => {
@@ -255,6 +383,18 @@ onMounted(async () => {
     profileForm.email = profile.value.email
   } catch {
     ElMessage.error(t('settings.profile.toast.loadFailed'))
+  }
+
+  // 管理员才加载代理配置（卡片 v-if="authStore.isAdmin"，非管理员不发请求）
+  if (authStore.isAdmin) {
+    try {
+      const res = await getFaviconProxy()
+      proxyForm.enabled = res.data.enabled
+      proxyForm.host = res.data.host || ''
+      proxyForm.port = res.data.port ? String(res.data.port) : ''
+    } catch {
+      ElMessage.error(t('settings.proxy.toast.loadFailed'))
+    }
   }
 })
 
@@ -371,6 +511,50 @@ async function handleChangePassword() {
   margin: 0 0 20px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--hlaia-border);
+}
+
+/* ---- 管理员徽标（代理卡片标题内的小标签） ---- */
+.admin-badge {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--hlaia-surface-light);
+  border: 1px solid var(--hlaia-border);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--hlaia-text-muted);
+  vertical-align: middle;
+}
+
+/* ---- 卡片内说明文字（代理配置的解释段落） ---- */
+.card-description {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--hlaia-text-muted);
+  margin: -8px 0 16px;
+}
+
+/* ---- 代理卡片的双按钮行（保存 + 测试） ---- */
+.proxy-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 次要按钮：描边样式，与主按钮区分"保存"与"测试"的权重 */
+.action-btn-secondary {
+  background: var(--hlaia-surface-light);
+  color: var(--hlaia-primary);
+  border: 1px solid var(--hlaia-primary-light);
+}
+
+.action-btn-secondary:hover:not(:disabled) {
+  background: var(--hlaia-primary);
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(74, 127, 199, 0.25);
+  transform: translateY(-1px);
 }
 
 /* ---- 用户名只读行 ---- */
