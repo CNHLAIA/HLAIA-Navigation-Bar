@@ -1,2 +1,0 @@
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Vue 3 组件规范:SearchBar.vue 点击处理函数修改需遵循 script setup 约定"}
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "CSS/i18n/禁止模式等质量规范,确保改动不引入违规"}

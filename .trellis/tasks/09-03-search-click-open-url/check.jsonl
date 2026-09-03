@@ -1,2 +1,0 @@
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查前端改动是否符合质量规范与审查清单"}
-{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查组件改动是否符合 Vue 3 组件规范"}
