@@ -147,8 +147,8 @@ function handleSelect(item) {
     folderStore.setCurrentFolder(item.id)
     router.push('/')
   } else {
-    folderStore.setCurrentFolder(item.folderId)
-    router.push('/')
+    // 书签：新标签页打开目标网址，不改变当前浏览位置
+    window.open(item.url, '_blank', 'noopener,noreferrer')
   }
 }
 
@@ -156,10 +156,11 @@ function handleResultClick(item) {
   showResults.value = false
   if (item.type === 'folder') {
     folderStore.setCurrentFolder(item.id)
+    router.push('/')
   } else {
-    folderStore.setCurrentFolder(item.folderId)
+    // 书签：新标签页打开目标网址，不改变当前浏览位置
+    window.open(item.url, '_blank', 'noopener,noreferrer')
   }
-  router.push('/')
 }
 
 function handleBlur() {
