@@ -451,3 +451,19 @@ async function handleDragEnd() {
 实际参考文件：
 - `frontend/src/components/BookmarkGrid.vue`（书签拖拽排序）
 - `frontend/src/components/FolderTree.vue`（文件夹拖拽排序 + 嵌套层级）
+
+## 外链打开约定
+
+任何组件中"打开一个书签/URL"必须统一使用：
+
+```js
+window.open(url, '_blank', 'noopener,noreferrer')
+```
+
+- `_blank` 新标签页打开；`noopener,noreferrer` 防止新页面通过 `window.opener` 反向操控导航页，且不泄露 Referrer
+- 点击书签类结果只打开 URL，不切换当前文件夹、不改变路由；文件夹类结果才做 `setCurrentFolder` + `router.push('/')`
+- 2026-09 曾因 SearchBar 点击搜索结果跳转所在文件夹而非打开网址出 bug，根因即未复用该约定
+
+实际参考文件：
+- `frontend/src/components/BookmarkGrid.vue`（卡片点击打开书签）
+- `frontend/src/components/SearchBar.vue`（搜索建议/搜索结果点击打开书签）
