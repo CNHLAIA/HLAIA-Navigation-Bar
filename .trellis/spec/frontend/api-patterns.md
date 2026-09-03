@@ -191,6 +191,15 @@ export function importBookmarks(formData) {
 }
 ```
 
+**FormData 禁止 append null/undefined。** `formData.append(k, null)` 会把值序列化成字符串 `"null"` 传给后端,Spring 把 `"null"` 转 `Long` 直接报类型转换错误(不是传空)。可选参数(如导入的 `targetFolderId`,后端 `required=false`)必须先判空,仅非空才 append——缺省字段后端自然收到 null:
+
+```js
+// 正确:根层级导入不传 targetFolderId
+if (importTargetFolderId.value !== null) {
+  formData.append('targetFolderId', importTargetFolderId.value)
+}
+```
+
 ### 文件下载 / 二进制响应
 
 后端返回文件（如 CSV 导出、附件）时，响应体是二进制流而非 `{ code, message, data }` JSON。**必须配 `responseType: 'blob'`**，否则响应拦截器会把 Blob 当业务对象解析，`res.code` 为 `undefined`，被误判为业务错误并弹 `ElMessage.error`。
