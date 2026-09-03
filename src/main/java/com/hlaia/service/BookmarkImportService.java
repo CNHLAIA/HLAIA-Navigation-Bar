@@ -127,9 +127,12 @@ public class BookmarkImportService {
         // Chrome 书签文件的根结构：<H1>Bookmarks</H1> 后面紧跟 <DL><p>
         Element rootDl = doc.selectFirst("DL");
         if (rootDl == null) {
-            // 如果 HTML 中没有 <DL> 标签，说明文件格式不正确
-            log.warn("No <DL> tag found in imported bookmark file");
-            throw new BusinessException(ErrorCode.IMPORT_FAILED);
+            // 没有 <DL> 标签说明不是 Netscape 书签格式
+            // （例如本站旧的"展示页"导出文件就没有任何 DL/DT 结构）。
+            // 抛 IMPORT_INVALID_FORMAT 而非笼统的 IMPORT_FAILED，
+            // 让用户明确知道是"格式不支持"而不是"导入过程出错"。
+            log.warn("No <DL> tag found in imported bookmark file, not a Netscape bookmark file");
+            throw new BusinessException(ErrorCode.IMPORT_INVALID_FORMAT);
         }
 
         // ============ 第三步：预加载用户已有的书签 URL，用于重复检测 ============

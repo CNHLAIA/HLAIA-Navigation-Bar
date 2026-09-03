@@ -156,6 +156,11 @@ export default {
     exportDialog: {
       title: '导出书签',
       summary: '将导出全部 {folders} 个文件夹、{bookmarks} 个书签（含图标）',
+      format: '导出格式',
+      formatNetscape: '标准格式（Netscape）',
+      formatPretty: '展示页面（HTML）',
+      netscapeHint: '标准书签文件格式，可再次导入本站，也可导入 Chrome / Firefox 浏览器',
+      prettyHint: '美观的自包含展示页，适合分享浏览，不可再导入本站',
       exportBtn: '确认导出',
       exporting: '正在导出...',
       success: '导出成功',

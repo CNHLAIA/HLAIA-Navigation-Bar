@@ -51,6 +51,9 @@ public enum ErrorCode {
     BOOKMARK_DUPLICATE(2009, "Bookmark already exists"), // 书签已存在（同一用户相同 URL）
     IMPORT_FAILED(2008, "Bookmark import failed"),      // 书签导入失败
     EXPORT_FAILED(2010, "Bookmark export failed"),      // 书签导出失败
+    // 独立于 IMPORT_FAILED：文件里连 <DL> 结构都没有说明根本不是 Netscape 书签格式
+    // （如本站旧的"展示页"导出文件），明确告知格式不支持而非笼统的"导入失败"
+    IMPORT_INVALID_FORMAT(2011, "Unsupported bookmark file format: expected Netscape bookmark HTML with <DL> structure"), // 导入文件不是 Netscape 书签格式
 
     // ========== 自定义错误码 (9999 - 99999) (练习用) ==========
     SO_HANDSOME(10086, "You are so handsome");

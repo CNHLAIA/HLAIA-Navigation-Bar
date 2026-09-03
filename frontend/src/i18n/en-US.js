@@ -156,6 +156,11 @@ export default {
     exportDialog: {
       title: 'Export Bookmarks',
       summary: 'This will export all {folders} folder(s) and {bookmarks} bookmark(s) (with icons)',
+      format: 'Export Format',
+      formatNetscape: 'Standard (Netscape)',
+      formatPretty: 'Presentation Page (HTML)',
+      netscapeHint: 'Standard bookmark file format. Can be re-imported here or imported into Chrome / Firefox.',
+      prettyHint: 'Self-contained presentation page for sharing and viewing. Cannot be re-imported.',
       exportBtn: 'Export',
       exporting: 'Exporting...',
       success: 'Export succeeded',

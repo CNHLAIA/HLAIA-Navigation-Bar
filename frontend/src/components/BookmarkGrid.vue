@@ -333,6 +333,19 @@
         <p class="export-summary">
           {{ t('bookmarks.exportDialog.summary', { folders: exportStats.folders, bookmarks: exportStats.bookmarks }) }}
         </p>
+        <!-- 导出格式选择：标准格式可与导入端往返，展示页仅供分享浏览 -->
+        <div class="export-section">
+          <label class="export-label">{{ t('bookmarks.exportDialog.format') }}</label>
+          <el-radio-group v-model="exportFormat" class="export-radio-group">
+            <el-radio value="netscape">{{ t('bookmarks.exportDialog.formatNetscape') }}</el-radio>
+            <el-radio value="pretty">{{ t('bookmarks.exportDialog.formatPretty') }}</el-radio>
+          </el-radio-group>
+          <p class="export-hint">
+            {{ exportFormat === 'netscape'
+              ? t('bookmarks.exportDialog.netscapeHint')
+              : t('bookmarks.exportDialog.prettyHint') }}
+          </p>
+        </div>
       </div>
       <template #footer>
         <el-button @click="exportDialogVisible = false">{{ t('common.cancel') }}</el-button>
@@ -368,7 +381,7 @@ import BatchToolbar from './BatchToolbar.vue'
 import FolderPickerDialog from './FolderPickerDialog.vue'
 import { useFolderStore } from '@/stores/folder'
 import { importBookmarks, getExportData } from '@/api/bookmark'
-import { renderExportHtml } from '@/utils/exportHtml'
+import { renderExportHtml, renderNetscapeHtml } from '@/utils/exportHtml'
 
 const { t } = useI18n()
 
@@ -452,6 +465,11 @@ const importDuplicateMode = ref('OVERWRITE')
 // ---- 导出书签弹窗状态 ----
 const exportDialogVisible = ref(false)
 const exportLoading = ref(false)
+/**
+ * 导出格式：'netscape'（标准格式，默认，可再导入）| 'pretty'（展示页，仅供分享浏览）
+ * 默认标准格式——用户最常见诉求是「导出后还能导回来/给浏览器用」
+ */
+const exportFormat = ref('netscape')
 
 /**
  * 导入对话框中可选择的文件夹列表（扁平化后的树形结构）
@@ -927,7 +945,8 @@ function openExportDialog() {
  *
  * 下载流程（前端生成 HTML）：
  *   1. 调用 getExportData()，走标准 Result JSON，拦截器解包后 res.data 即 ExportDataResponse
- *   2. 用 renderExportHtml(res.data) 把数据渲染成自包含可视化 HTML 字符串
+ *   2. 按所选格式渲染：netscape → 标准 Netscape 书签文件（可再导入）；
+ *      pretty → 自包含可视化展示页（renderExportHtml，行为与历史版本一致）
  *   3. 将 HTML 字符串包成 Blob，构造可下载的 Object URL
  *   4. 创建临时 <a> 标签触发下载，文件名前端拼 bookmarks_<yyyyMMdd_HHmmss>.html
  *   5. 下载后释放 Object URL，避免内存泄漏
@@ -936,7 +955,9 @@ async function handleExportConfirm() {
   exportLoading.value = true
   try {
     const res = await getExportData()
-    const html = renderExportHtml(res.data)
+    const html = exportFormat.value === 'pretty'
+      ? renderExportHtml(res.data)
+      : renderNetscapeHtml(res.data)
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
 
@@ -1446,11 +1467,41 @@ async function handleDragEnd() {
 /* ---- 导出对话框 ---- */
 .export-form {
   padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .export-summary {
   font-family: 'DM Sans', sans-serif;
   font-size: 13px;
+  color: var(--hlaia-text-muted);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* 格式选择区：结构与导入对话框的 section 保持一致观感 */
+.export-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-label {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--hlaia-text);
+}
+
+.export-radio-group {
+  display: flex;
+  gap: 16px;
+}
+
+.export-hint {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
   color: var(--hlaia-text-muted);
   margin: 0;
   line-height: 1.6;

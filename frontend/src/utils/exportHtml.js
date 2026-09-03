@@ -1,5 +1,7 @@
 /**
- * 把导出数据渲染成自包含可视化 HTML 字符串
+ * 书签导出 HTML 渲染器：同一份 export-data JSON 支持两种产物
+ *   - renderExportHtml：自包含可视化展示页（分享浏览用，无 DL/DT 结构，不可再导入）
+ *   - renderNetscapeHtml：Netscape 标准书签文件（可再导入本站，Chrome/Firefox 也可导入）
  *
  * 设计取向（见 .trellis/tasks/07-22-export-visual-html/design.md §4）：
  *   - 安静、克制的「索引式」版面，单色系（项目主色 #4A7FC7），拒绝彩色拼盘。
@@ -135,6 +137,72 @@ function stampIds(nodes) {
     n.__id = nextId()
     if (n.children && n.children.length) stampIds(n.children)
   }
+}
+
+// ============================================================
+// Netscape 标准书签格式（第二套渲染目标）
+// ============================================================
+
+/**
+ * 渲染一个书签的 <DT><A> 行（Netscape 格式）
+ *
+ * ICON 属性只在 iconUrl 非空时写入：库里存的就是 base64 data URI，
+ * 原样放进属性即可与导入端完整往返（导入端读 ICON 属性存回 iconUrl）。
+ * HREF/ICON 属性值和标题文本都必须过 escapeHtml——
+ * 标题里的引号或尖括号一旦裸写就会破坏标签结构。
+ */
+function netscapeBookmarkLine(bm, pad) {
+  const iconAttr = bm.iconUrl && String(bm.iconUrl).trim()
+    ? ` ICON="${escapeHtml(bm.iconUrl)}"`
+    : ''
+  return `${pad}<DT><A HREF="${escapeHtml(bm.url || '')}"${iconAttr}>${escapeHtml(bm.title || '')}</A>`
+}
+
+/**
+ * 递归渲染一个文件夹节点为 Netscape 片段：<DT><H3> + 嵌套 <DL>
+ *
+ * 缩进布局刻意与 Chrome 导出物逐字对齐：文件夹的 <DL> 另起一行写在 <DT><H3> 之后。
+ * 为什么不把 <DL> 写进 <DT> 标签内部？因为导入端（BookmarkImportService）按
+ * "DT > H3 = 文件夹、DT 内嵌 DL = 子内容"解析，且 Jsoup 依 HTML 规范会把这种
+ * 换行写法的 <DL> 自动归为上一个 <DT> 的子元素——照抄 Chrome 布局即保证往返兼容。
+ */
+function netscapeFolder(node, depth) {
+  const pad = '    '.repeat(depth)
+  const lines = []
+  lines.push(`${pad}<DT><H3>${escapeHtml(node.name || '')}</H3>`)
+  lines.push(`${pad}<DL><p>`)
+  // 先直属书签再子文件夹：与数据库 sortOrder 及导入端遍历顺序一致
+  for (const bm of node.bookmarks || []) {
+    lines.push(netscapeBookmarkLine(bm, pad + '    '))
+  }
+  for (const child of node.children || []) {
+    lines.push(netscapeFolder(child, depth + 1))
+  }
+  lines.push(`${pad}</DL><p>`)
+  return lines.join('\n')
+}
+
+/**
+ * 主入口（标准格式）：把 ExportDataResponse 渲染成 Netscape Bookmark 文件
+ *
+ * 产物是浏览器通用书签交换格式：可再次导入本站（与 renderExportHtml 共用同一份
+ * export-data JSON，结构对齐导入端解析逻辑），也可被 Chrome/Firefox 书签管理器导入。
+ * 头部四行（DOCTYPE/META/TITLE/H1）是 Netscape 格式的固定文件头，Chrome 靠它识别文件类型。
+ *
+ * @param {Object} data - { exportedAt, folders: ExportFolderNode[] }
+ * @returns {string} Netscape Bookmark HTML 文档
+ */
+export function renderNetscapeHtml(data) {
+  const folders = (data && data.folders) || []
+  const body = folders.map((f) => netscapeFolder(f, 1)).join('\n')
+  return `<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- This is an automatically generated file. It will be read and overwritten. DO NOT EDIT! -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+${body}
+</DL><p>`
 }
 
 /**
