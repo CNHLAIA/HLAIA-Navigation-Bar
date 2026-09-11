@@ -179,6 +179,14 @@
           </svg>
           {{ t('bookmarks.contextMenu.edit') }}
         </button>
+        <!-- 备注：打开 NoteDialog 编辑 Markdown 备注（唯一入口，手机长按菜单同款） -->
+        <button class="ctx-item" @click="handleEditNote">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M9 1.75H3.5a1.167 1.167 0 0 0-1.167 1.167v8.166a1.167 1.167 0 0 0 1.167 1.167h7a1.167 1.167 0 0 0 1.167-1.167V4.375L9 1.75z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8.75 1.75v2.625h2.917M4.667 7.583h4.666M4.667 10.083h2.916" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          {{ t('bookmarks.contextMenu.note') }}
+        </button>
         <button class="ctx-item" @click="handleCopyUrl">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M5.25 8.75L9 5M9 5H6.75M9 5v2.25" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -249,6 +257,14 @@
       :title="t('bookmarks.moveDialog.title')"
       :exclude-folder-id="folderId"
       @confirm="handleMoveConfirm"
+    />
+
+    <!-- 书签备注编辑弹窗：纯 UI 组件，保存逻辑在这里组合 -->
+    <NoteDialog
+      v-model:visible="noteDialogVisible"
+      :bookmark="noteBookmark"
+      :saving="noteSaving"
+      @save="handleNoteSave"
     />
 
     <!-- 导入书签对话框 -->
@@ -400,6 +416,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import BookmarkCard from './BookmarkCard.vue'
 import BatchToolbar from './BatchToolbar.vue'
 import FolderPickerDialog from './FolderPickerDialog.vue'
+import NoteDialog from './NoteDialog.vue'
 import { useFolderStore } from '@/stores/folder'
 import { importBookmarks, getExportData } from '@/api/bookmark'
 import { renderExportHtml, renderNetscapeHtml } from '@/utils/exportHtml'
@@ -473,6 +490,14 @@ const dialogForm = ref({
 // ---- 移动弹窗状态 ----
 const moveDialogVisible = ref(false)
 const moveBookmarkIds = ref([])
+
+// ---- 备注弹窗状态 ----
+/** 备注编辑对话框可见性 */
+const noteDialogVisible = ref(false)
+/** 当前编辑备注的书签对象（NoteDialog 打开时取其 description 为初值） */
+const noteBookmark = ref(null)
+/** 备注保存 loading 态（驱动 NoteDialog 保存按钮） */
+const noteSaving = ref(false)
 
 // ---- 导入书签弹窗状态 ----
 const importDialogVisible = ref(false)
@@ -745,6 +770,18 @@ function handleEdit() {
 }
 
 /**
+ * 从右键菜单打开备注编辑对话框
+ * 记录目标书签（NoteDialog 打开时取其 description 为初值），关闭菜单并弹窗
+ */
+function handleEditNote() {
+  const bm = contextMenu.value.bookmark
+  if (!bm) return
+  contextMenu.value.visible = false
+  noteBookmark.value = bm
+  noteDialogVisible.value = true
+}
+
+/**
  * 从右键菜单复制书签网址到剪贴板
  */
 async function handleCopyUrl() {
@@ -862,6 +899,24 @@ async function handleDialogConfirm() {
     dialogVisible.value = false
   } finally {
     dialogLoading.value = false
+  }
+}
+
+/**
+ * 备注保存：提交 description 到既有更新接口
+ * 空串 = 清空备注（后端部分更新语义：非 null 即覆盖），成功后关弹窗；
+ * 失败留在面板，错误提示由 request.js 拦截器统一处理（与书签对话框一致）
+ */
+async function handleNoteSave(text) {
+  noteSaving.value = true
+  try {
+    await bookmarkStore.updateBookmark(noteBookmark.value.id, { description: text })
+    ElMessage.success(t('bookmarks.toast.updated'))
+    noteDialogVisible.value = false
+  } catch {
+    // 拦截器已弹出错误提示，这里仅拦截异常防止未处理的 Promise 拒绝
+  } finally {
+    noteSaving.value = false
   }
 }
 

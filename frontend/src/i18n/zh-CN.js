@@ -87,6 +87,7 @@ export default {
     },
     contextMenu: {
       edit: '编辑',
+      note: '备注',
       copyUrl: '复制网址',
       copyUrlSuccess: '网址已复制到剪贴板',
       copyUrlFailed: '复制网址失败',
@@ -97,6 +98,12 @@ export default {
     refresh: '刷新',
     editDialog: {
       title: '编辑书签'
+    },
+    noteDialog: {
+      title: '编辑备注',
+      placeholder: '支持 Markdown 语法（标题、列表、粗斜体、代码块、引用、链接...）',
+      edit: '编辑',
+      preview: '预览'
     },
     form: {
       title: '标题',

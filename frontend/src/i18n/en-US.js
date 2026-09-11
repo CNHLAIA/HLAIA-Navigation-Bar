@@ -87,6 +87,7 @@ export default {
     },
     contextMenu: {
       edit: 'Edit',
+      note: 'Note',
       copyUrl: 'Copy URL',
       copyUrlSuccess: 'URL copied to clipboard',
       copyUrlFailed: 'Failed to copy URL',
@@ -97,6 +98,12 @@ export default {
     refresh: 'Refresh',
     editDialog: {
       title: 'Edit Bookmark'
+    },
+    noteDialog: {
+      title: 'Edit Note',
+      placeholder: 'Markdown supported (headings, lists, emphasis, code blocks, quotes, links...)',
+      edit: 'Edit',
+      preview: 'Preview'
     },
     form: {
       title: 'Title',

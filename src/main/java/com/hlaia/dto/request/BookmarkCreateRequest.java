@@ -2,6 +2,7 @@ package com.hlaia.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -52,9 +53,16 @@ public class BookmarkCreateRequest {
     private String url;
 
     /**
-     * 书签描述/备注（可选）
-     * 用户可以给书签添加备注说明
+     * 书签描述/备注（可选，支持 Markdown 语法）
+     * 用户可以给书签添加备注说明，悬浮卡片时渲染展示
+     *
+     * @Size(max = 10000)：V8 迁移已将 DB 列拓宽为 TEXT（64KB），
+     *   原先 VARCHAR(500) 的数据库层长度限制消失后，由 Bean Validation 在
+     *   入口处兜底防止超大备注（10000 字符已远超正常备注长度）。
+     *   本 DTO 同时服务 POST/PUT（部分更新语义：null=不变，非 null 含空串=覆盖），
+     *   一处注解两处生效。可选字段校验只限长度，不限非空。
      */
+    @Size(max = 10000, message = "书签备注不能超过 10000 个字符")
     private String description;
 
     /**
