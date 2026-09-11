@@ -163,6 +163,24 @@ export function getBookmarks(folderId) {
 | 删除 | DELETE | `request.delete('/bookmarks/${id}')` |
 | 批量操作 | POST | `request.post('/bookmarks/batch-delete', { ids })` |
 
+### PUT 更新必须带全量必填字段（跨层契约陷阱）
+
+后端 PUT 接口普遍复用创建 DTO 做 `@Valid` 校验（如 `PUT /bookmarks/{id}` 复用 `BookmarkCreateRequest`，`title`/`url` `@NotBlank`、`folderId` `@NotNull`）。**Service 层虽是部分更新语义（null=不变），但校验发生在进 Service 之前**——只发改动字段的请求会被校验层以"xx不能为空"拒绝，误报为字段错误。
+
+```js
+// 错误：只发 description → "url: 书签链接不能为空" "folderId: 文件夹ID不能为空"
+await bookmarkStore.updateBookmark(id, { description: text })
+
+// 正确：改动字段 + 回带书签现有必填字段（title/url/folderId）
+await bookmarkStore.updateBookmark(id, {
+  title: bm.title, url: bm.url, folderId: bm.folderId,
+  iconUrl: bm.iconUrl ?? null, description: text
+})
+```
+
+> 教训来源：09-11-bookmark-note 任务备注保存首版被该校验拦截（2026-09-11 修复）。
+> 如果未来要做真正的部分更新接口，需后端引入校验分组或独立 Update DTO，而不是前端绕。
+
 ### URL 路径规范
 
 ```js
