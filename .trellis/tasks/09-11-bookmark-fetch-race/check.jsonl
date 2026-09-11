@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量规范与审查清单,check 阶段对照"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "校验 store 改动是否符合 Setup Store 约定"}

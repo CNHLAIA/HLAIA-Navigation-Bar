@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Pinia Setup Store 模式与 store 内 API 交互约定,改 bookmark.js 前必读"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "BookmarkGrid.vue watcher/生命周期约定,改 .finally 守卫前参考"}

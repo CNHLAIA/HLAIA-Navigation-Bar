@@ -183,6 +183,44 @@ async function fetchItems() {
 - `loading.value = false` 在 `finally` 中设置（不是 catch 后）
 - `res.data || []` 用 `|| []` 防止 null/undefined
 
+### 带参数的异步 Action 必须做过期响应守卫（last-request-wins）
+
+上面"异步 Action 模式"的无参数 fetch（如 staging 的 `fetchItems`）不存在竞态：并发调用拉的是同一份全局数据。
+但**按参数加载**的 fetch（如 `fetchBookmarks(folderId)`）不同：用户快速切换参数时会有多个请求同时在途，
+而并发 HTTP 请求的完成顺序没有契约——晚到的旧响应会覆盖新数据（2026-09 真实 bug：快速点目录 A→B，
+约 1 秒后界面被慢返回的 A 数据覆盖）。
+
+规则：**`await` 之后写任何 UI 状态（列表、loading）之前，必须校验本次请求是否仍是最新**。
+实现方式是 store 闭包内的非响应式递增序号（不需要进 state）：
+
+```js
+let fetchSeq = 0  // 纯内部控制流，用普通闭包变量
+
+async function fetchBookmarks(folderId) {
+  const seq = ++fetchSeq          // 取号必须先于任何 await
+  currentFolderId.value = folderId
+  // ...
+  loading.value = true
+  try {
+    const res = await getBookmarksApi(folderId)
+    bookmarkCache.value.set(folderId, res.data || [])  // 按 folderId 隔离的缓存写入不受过期影响
+    if (seq !== fetchSeq) return  // 过期响应：不写列表、不动 loading
+    bookmarks.value = res.data || []
+  } finally {
+    if (seq === fetchSeq) loading.value = false  // 只有最新请求有权关 loading
+  }
+}
+```
+
+要点：
+- 序号在**任何 await 之前**取，保证"谁是最新请求"的判定与界面所属目标一致
+- 旧请求的 `finally` 不得复位 loading（会闪断新请求的加载态）；新请求接管 loading 时自己负责置位/复位
+  （含缓存秒出路径：接管时同步 `loading.value = false`，兜底清掉被顶掉请求遗留的 loading）
+- 按目标 key 隔离的缓存可以照常写入（晚到的旧响应写自己的 key 天然正确），只挡 UI 状态写入
+- 组件里对这类 fetch 的 `.finally()` 收尾同样要守卫（比对触发时的参数与当前 props，如
+  `BookmarkGrid.vue` 文件夹 watcher 的 `if (newId !== props.folderId) return`）
+- 完整案例：`stores/bookmark.js` 的 `fetchBookmarks`（任务 09-11-bookmark-fetch-race）
+
 ### 写操作后刷新
 
 创建/更新/删除后，重新拉取完整列表（而非本地操作）：
