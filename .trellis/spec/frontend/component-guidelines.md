@@ -467,3 +467,42 @@ window.open(url, '_blank', 'noopener,noreferrer')
 实际参考文件：
 - `frontend/src/components/BookmarkGrid.vue`（卡片点击打开书签）
 - `frontend/src/components/SearchBar.vue`（搜索建议/搜索结果点击打开书签）
+
+## fixed 浮层视口钳制（两阶段定位）
+
+任何 `position: fixed` 且按鼠标坐标 / 元素 rect 定位的浮动 UI（右键菜单、悬浮弹窗），**必须**做视口钳制，禁止把坐标原样写入 `top/left`。否则浮层在视口边缘（如页面底部卡片右键）会溢出屏幕不可见。
+
+统一采用"两阶段定位"范式：
+
+```js
+// 阶段 1：provisional 坐标渲染（v-if 挂载 + 模板 ref）
+layer.x = e.clientX
+layer.y = e.clientY
+layer.visible = true
+
+// 阶段 2：nextTick 量取实际宽高后钳制（微任务在浏览器绘制前完成，无可见跳动）
+nextTick(() => {
+  const el = layerRef.value
+  if (!el) return
+  const { offsetWidth: w, offsetHeight: h } = el
+  const [vw, vh] = [window.innerWidth, window.innerHeight]
+  // 垂直：默认向下展开，底部放不下时翻转（浮层底边贴锚点 y），再 clamp 兜底极端小视口
+  let ny = anchorY
+  if (ny + h > vh - GAP) ny = anchorY - h
+  ny = Math.max(GAP, Math.min(ny, vh - GAP - h))
+  // 水平：右缘越界向左收，左缘下限 GAP
+  let nx = anchorX
+  if (nx + w > vw - GAP) nx = vw - GAP - w
+  if (nx < GAP) nx = GAP
+  layer.x = nx
+  layer.y = ny
+})
+```
+
+- `GAP` 取 8（视口留白），各处以同名语义常量定义（`POPOVER_GAP` / `CONTEXT_MENU_GAP`）
+- 动画只用 `opacity/transform`，不影响 `offsetWidth/offsetHeight` 量取
+- 2026-09 书签卡片右键菜单曾因无视口钳制，视口底部卡片菜单大部分溢出屏幕不可见，根因即未复用该范式
+
+实际参考文件：
+- `frontend/src/components/BookmarkCard.vue`（`showNotePopover`：备注悬浮弹窗，锚点为卡片 rect）
+- `frontend/src/components/BookmarkGrid.vue`（`handleCardContext`：右键菜单，锚点为鼠标坐标）

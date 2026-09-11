@@ -15,7 +15,7 @@
 | 规范 | 描述 | 状态 |
 |------|------|------|
 | [目录结构](./directory-structure.md) | 文件组织、命名约定、路径别名 | Done |
-| [组件规范](./component-guidelines.md) | Vue 3 组件模式、Props/Emits、递归组件、拖拽 | Done |
+| [组件规范](./component-guidelines.md) | Vue 3 组件模式、Props/Emits、递归组件、拖拽、fixed 浮层视口钳制 | Done |
 | [状态管理](./state-management.md) | Pinia Setup Store 模式、Store 与 API 交互 | Done |
 | [API 模式](./api-patterns.md) | Axios 封装、拦截器、Token 刷新、错误处理 | Done |
 | [质量规范](./quality-guidelines.md) | CSS 变量、i18n、响应式、禁止模式、审查清单 | Done |
