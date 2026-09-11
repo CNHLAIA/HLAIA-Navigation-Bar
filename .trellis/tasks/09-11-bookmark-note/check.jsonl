@@ -1,3 +1,0 @@
-{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "审查清单：i18n 双语完整性、CSS 变量使用、响应式、v-html 安全（html:false）"}
-{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "验证 description 数据流全链路一致（迁移→DTO→store→菜单/对话框/悬浮弹窗），清空空串语义无回归"}
-{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端改动（V8 迁移 + @Size 注解）的代码标准与中文学习注释要求"}
