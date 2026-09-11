@@ -42,3 +42,5 @@ jwt:
 logging:
   level:
     com.hlaia: debug
+    # SpringDoc 在文档端点启用时每次启动都打 WARN 提醒生产环境关闭，dev 属预期行为，降噪
+    org.springdoc.core.events.SpringDocAppInitializer: error
