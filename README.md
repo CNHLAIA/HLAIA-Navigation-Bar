@@ -99,7 +99,39 @@ HLAIANavigationBar/
 CREATE DATABASE hlaia_nav_dev DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-2. 复制 `.env.example` 为 `.env`，再按你的环境填写数据库、Redis、ES 和 JWT 配置。
+2. 在仓库根目录手动创建 `.env` 文件（已被 gitignore 忽略），按你的环境填写以下变量：
+
+```bash
+# ---------- Spring Profile ----------
+SPRING_PROFILES_ACTIVE=dev
+
+# ---------- MySQL ----------
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=hlaia_nav_dev
+MYSQL_USERNAME=change-me
+MYSQL_PASSWORD=change-me
+
+# ---------- Redis ----------
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=
+REDIS_DATABASE=3
+
+# ---------- Elasticsearch ----------
+ELASTICSEARCH_URI=http://127.0.0.1:9200
+
+# ---------- App ----------
+APP_REDIS_KEY_PREFIX=hlaia_nav_dev:
+
+# ---------- Docker Registry ----------
+REGISTRY=127.0.0.1:5000
+
+# ---------- JWT ----------
+JWT_SECRET=replace-with-a-long-random-secret-at-least-32-characters
+JWT_ACCESS_TOKEN_EXPIRATION=86400000
+JWT_REFRESH_TOKEN_EXPIRATION=31536000000
+```
 
 3. 启动后端服务：
 
@@ -177,7 +209,7 @@ docker compose push
 
 **② 服务器（NAS）**
 
-1. 克隆仓库，复制 `.env.example` 为 `.env`，填写生产环境的数据库、Redis、ES 和 JWT 配置，`REGISTRY` 与开发机保持一致。
+1. 克隆仓库，在仓库根目录手动创建 `.env` 文件（变量清单见上文「开发环境」一节），填写生产环境的数据库、Redis、ES 和 JWT 配置，`REGISTRY` 与开发机保持一致，`SPRING_PROFILES_ACTIVE=prod`。
 
 2. 拉取镜像并启动：
 
