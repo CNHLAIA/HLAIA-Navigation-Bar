@@ -906,11 +906,22 @@ async function handleDialogConfirm() {
  * 备注保存：提交 description 到既有更新接口
  * 空串 = 清空备注（后端部分更新语义：非 null 即覆盖），成功后关弹窗；
  * 失败留在面板，错误提示由 request.js 拦截器统一处理（与书签对话框一致）
+ *
+ * 必须回带 title/url/folderId 全量必填字段：PUT 复用 BookmarkCreateRequest
+ * 做创建级 @Valid 校验（@NotBlank url/title、@NotNull folderId），只发
+ * description 会在进 Service 的部分更新逻辑之前就被校验层拦截报错
  */
 async function handleNoteSave(text) {
   noteSaving.value = true
   try {
-    await bookmarkStore.updateBookmark(noteBookmark.value.id, { description: text })
+    const bm = noteBookmark.value
+    await bookmarkStore.updateBookmark(bm.id, {
+      title: bm.title,
+      url: bm.url,
+      iconUrl: bm.iconUrl ?? null,
+      folderId: bm.folderId,
+      description: text
+    })
     ElMessage.success(t('bookmarks.toast.updated'))
     noteDialogVisible.value = false
   } catch {
