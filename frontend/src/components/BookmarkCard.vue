@@ -173,8 +173,8 @@ function handleContextMenu(e) {
 
 // ---- 悬浮备注弹窗 ----
 
-/** 悬浮延迟：≥1 秒才弹出，避免鼠标扫过卡片时误弹 */
-const NOTE_HOVER_DELAY = 1000
+/** 悬浮延迟：0.5 秒后弹出，避免鼠标扫过卡片时误弹 */
+const NOTE_HOVER_DELAY = 500
 
 /** 弹窗与卡片/视口边缘的留白 */
 const POPOVER_GAP = 8
