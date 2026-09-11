@@ -577,6 +577,9 @@ watch(
       }
 
       bookmarkStore.fetchBookmarks(newId).finally(() => {
+        // 过期请求的收尾：此时 props.folderId 已指向更新的目录，新一轮 watcher
+        // 已重置骨架屏/动画状态，这里不能清掉新目录的定时器或触发错乱动画
+        if (newId !== props.folderId) return
         // API 完成后（无论成功失败），清除定时器并隐藏骨架屏
         clearTimeout(skeletonTimer)
         showSkeleton.value = false

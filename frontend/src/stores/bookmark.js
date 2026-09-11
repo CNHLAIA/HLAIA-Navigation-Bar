@@ -63,18 +63,31 @@ export const useBookmarkStore = defineStore('bookmark', () => {
 
   // ---- Actions ----
 
+  // 非响应式请求序号：并发 HTTP 请求的完成顺序无契约，快速切换文件夹时
+  // 晚到的旧响应会覆盖新目录的数据。递增取号 + 落地时比对，过期即弃。
+  // 纯内部控制流，不需要进 state/getters，故用普通闭包变量
+  let fetchSeq = 0
+
   /**
    * 获取指定文件夹下的书签列表
+   *
+   * 并发语义（last-request-wins）：每次调用取一个递增序号，响应落地时若序号
+   * 已过期（说明已有更新的 fetch 在途/已完成），该响应对 UI 作废——不写
+   * bookmarks、不动 loading；但仍写入 bookmarkCache（按 folderId 隔离，
+   * 晚到的旧响应写自己的缓存天然正确，回访时还能秒出）。
    *
    * 缓存策略：
    * - 如果 bookmarkCache 中有该文件夹的缓存，立即用缓存填充 bookmarks，
    *   不设 loading（用户无感知），然后后台静默请求最新数据
    * - 如果没有缓存，走正常流程（loading = true，等 API 返回）
-   * - 无论哪种路径，API 返回后都会更新缓存和 bookmarks
+   * - 无论哪种路径，API 返回后都会更新缓存
    *
    * @param {number} folderId
    */
   async function fetchBookmarks(folderId) {
+    // 取号必须先于任何 await：序号与 currentFolderId/选中状态同步推进，
+    // 保证"谁是最新请求"的判定与界面所属目录一致
+    const seq = ++fetchSeq
     currentFolderId.value = folderId
     // 切换文件夹时清空选中状态
     selectedIds.value = new Set()
@@ -82,14 +95,21 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     // 检查缓存：有缓存则立即展示，不触发 loading
     const cached = bookmarkCache.value.get(folderId)
     if (cached) {
-      // 立即用缓存数据填充，用户看到秒出效果
+      // 立即用缓存数据填充（同步执行，无竞态窗口），用户看到秒出效果
       bookmarks.value = [...cached]
-      // loading 保持 false，UI 不会显示骨架屏/加载动画
+      // 缓存路径接管 loading：本路径不展示加载态，同时兜底清掉被顶掉的
+      // 无缓存请求遗留的 loading（过期请求的 finally 已无权关闭它）
+      loading.value = false
 
       // 后台静默请求最新数据
       try {
         const res = await getBookmarksApi(folderId)
         const freshData = res.data || []
+        if (seq !== fetchSeq) {
+          // 过期：用户已切走，不覆盖新目录的 bookmarks；只补缓存
+          bookmarkCache.value.set(folderId, freshData)
+          return
+        }
         bookmarks.value = freshData
         // 同步更新缓存
         bookmarkCache.value.set(folderId, freshData)
@@ -102,11 +122,14 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       try {
         const res = await getBookmarksApi(folderId)
         const data = res.data || []
-        bookmarks.value = data
-        // 首次加载的数据存入缓存，下次回访时秒出
+        // 首次加载的数据存入缓存，下次回访时秒出（缓存写入不受过期影响）
         bookmarkCache.value.set(folderId, data)
+        // 过期：不写 bookmarks，loading 由最新请求负责关闭
+        if (seq !== fetchSeq) return
+        bookmarks.value = data
       } finally {
-        loading.value = false
+        // 只有最新请求有权关 loading：旧请求提前置 false 会闪断新请求的加载态
+        if (seq === fetchSeq) loading.value = false
       }
     }
   }
