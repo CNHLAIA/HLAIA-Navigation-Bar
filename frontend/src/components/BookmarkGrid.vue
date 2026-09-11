@@ -170,6 +170,7 @@
     <teleport to="body">
       <div
         v-if="contextMenu.visible"
+        ref="contextMenuRef"
         class="card-context-menu"
         :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
       >
@@ -469,6 +470,13 @@ const gridData = computed({
 })
 
 // ---- 右键菜单状态 ----
+
+/** 菜单与视口边缘的留白（与 BookmarkCard 的 POPOVER_GAP 同语义） */
+const CONTEXT_MENU_GAP = 8
+
+/** 菜单 DOM 引用：两阶段定位的第二阶段量取实际宽高用 */
+const contextMenuRef = ref(null)
+
 const contextMenu = ref({
   visible: false,
   x: 0,
@@ -676,7 +684,10 @@ function handleCardClick({ bookmark, ctrlKey }) {
 }
 
 /**
- * 处理卡片右键菜单
+ * 处理卡片右键菜单：两阶段定位（与 BookmarkCard 备注悬浮弹窗同范式）
+ *   1. 先按鼠标坐标 provisional 渲染（此时用户还看不到）
+ *   2. nextTick 量取菜单实际宽高后做视口钳制与上下翻转
+ * nextTick 是微任务，浏览器绘制前完成修正，不产生可见的位置跳动
  */
 function handleCardContext({ bookmark, x, y }) {
   contextMenu.value = {
@@ -685,6 +696,32 @@ function handleCardContext({ bookmark, x, y }) {
     y,
     bookmark
   }
+
+  nextTick(() => {
+    const menu = contextMenuRef.value
+    if (!menu) return
+    const w = menu.offsetWidth
+    const h = menu.offsetHeight
+    const vw = window.innerWidth
+    const vh = window.innerHeight
+
+    // 垂直：默认菜单顶边贴鼠标向下展开；底部放不下时翻转为菜单底边贴鼠标
+    let ny = y
+    if (ny + h > vh - CONTEXT_MENU_GAP) {
+      ny = y - h
+    }
+    // 极端矮视口（翻转后仍放不下）：贴边显示
+    ny = Math.max(CONTEXT_MENU_GAP, Math.min(ny, vh - CONTEXT_MENU_GAP - h))
+
+    // 水平：默认与鼠标对齐，越界时钳制在视口内
+    let nx = x
+    if (nx + w > vw - CONTEXT_MENU_GAP) nx = vw - CONTEXT_MENU_GAP - w
+    if (nx < CONTEXT_MENU_GAP) nx = CONTEXT_MENU_GAP
+
+    contextMenu.value.x = nx
+    contextMenu.value.y = ny
+  })
+
   // 点击任意位置关闭菜单
   const close = () => {
     contextMenu.value.visible = false
