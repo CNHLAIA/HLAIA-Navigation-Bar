@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "NoteDialog 受控对话框/emits/双 style 块模式、BookmarkCard 悬浮交互的组件约定（SFC 结构、props/emits、teleport 全局样式先例）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "i18n 双语键、CSS 变量主题、响应式媒体查询、禁止模式等前端质量红线"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "V8 Flyway 迁移命名与编写规范（V4 拓宽 icon_url 先例、utf8mb4、COMMENT 要求）"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "description 字段跨层流动（DB→DTO→API→store→组件），避免漏改某一层的跨层检查思路"}

@@ -402,6 +402,26 @@ transition: all 0.3s ease;        /* 长过渡（阴影、边框色） */
 
 ---
 
+## Markdown 渲染约定（v-html 安全）
+
+来源：09-11-bookmark-note 任务（书签备注功能）。全项目渲染用户产出的 Markdown（书签备注等）必须走共享单例 `@/utils/markdown.js` 的 `renderMarkdown()`：
+
+```js
+import { renderMarkdown } from '@/utils/markdown'
+// v-html 安全性由 markdown.js 内建保证（html:false 转义原始 HTML）
+<div v-html="renderMarkdown(text)"></div>
+```
+
+约定要点：
+
+- **单例实例**：`markdown-it` 解析器全项目只建一次，多处渲染（悬浮弹窗、对话框预览）共享，勿在组件内自建实例
+- **`html: false` 是安全底线**：渲染前转义原始 HTML 片段，防备注内容注入脚本（XSS 防线内建，不引入 DOMPurify）；除此外不允许任何路径用 `v-html` 渲染用户输入
+- **链接外链约定内建**：`link_open` 渲染规则已统一加 `target="_blank" rel="noopener noreferrer"`，渲染产物中的链接自动遵守外链打开约定
+- **`fuzzyLink: true` 需显式开启**：markdown-it 15 依赖的 linkify-it v6 把裸域名（`www.xxx`）自动链接的默认值改为 false，markdown.js 已显式恢复
+- **配套数据语义**（后端契约）：`bookmark.description` 即备注字段；PUT 部分更新语义为 **null=不变，空串=清空**，清空备注提交 `description: ''` 而非 null
+
+---
+
 ## 禁止模式
 
 ### 不要做的事
@@ -409,6 +429,7 @@ transition: all 0.3s ease;        /* 长过渡（阴影、边框色） */
 | 禁止 | 原因 | 替代方案 |
 |------|------|----------|
 | 使用 `@element-plus/icons-vue` | 避免额外依赖 | `shallowRef` + `h()` 自定义 SVG 或内联 SVG |
+| 自建 markdown-it 实例或绕过 `utils/markdown.js` 用 v-html 渲染用户内容 | XSS 防线（html:false）和链接外链约定只在共享单例内生效 | `renderMarkdown()`（见「Markdown 渲染约定」） |
 | 使用 Options API | 项目统一 Composition API | `<script setup>` |
 | 组件内直接调用 API（普通页面） | 通过 Store 中转 | Store action -> API function |
 | 硬编码中文文本 | 不支持 i18n | `t('key')` |
